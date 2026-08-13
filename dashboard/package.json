@@ -1,0 +1,21 @@
+{
+  "name": "bookfinder-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "React dashboard for BookFinder — live checkpoint feed and shelf status via Firebase Firestore realtime listeners.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^12.17.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}
