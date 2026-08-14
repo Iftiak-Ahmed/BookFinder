@@ -25,7 +25,7 @@ export default function WrongPlacementHistory({ alerts, activeCount, loading, on
           </span>
           <div>
             <h1>Wrong Placement History</h1>
-            <p className="brand-sub">Misplacement alerts · CSE-406 · MIST</p>
+            <p className="brand-sub">Misplacement alerts</p>
           </div>
         </div>
 

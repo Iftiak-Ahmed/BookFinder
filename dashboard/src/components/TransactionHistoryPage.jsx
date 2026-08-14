@@ -35,7 +35,7 @@ export default function TransactionHistoryPage({ transactions, loading, error, o
           </span>
           <div>
             <h1>Transaction History</h1>
-            <p className="brand-sub">Issue / return audit trail · CSE-406 · MIST</p>
+            <p className="brand-sub">Issue / return audit trail</p>
           </div>
         </div>
 

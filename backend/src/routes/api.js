@@ -104,18 +104,86 @@ api.post('/students', async (req, res) => {
   }
 });
 
-/** GET /api/students/:id/issued — the books this student currently holds. */
+/** How long a book may be held before it's overdue, and the daily penalty
+ *  after that. Placeholder policy — tune freely, nothing else depends on it. */
+const LOAN_DAYS = 14;
+const FINE_PER_DAY = 5;
+
+/** Every book currently checked out to `cardUid`, each dated from the
+ *  transactions audit trail, with a due date and any accrued fine. */
+async function fetchIssuedBooks(cardUid) {
+  const snapshot = await db
+    .collection('books')
+    .where('issuedTo', '==', cardUid)
+    .where('status', '==', 'checked_out')
+    .get();
+
+  const books = await Promise.all(
+    snapshot.docs.map(async (doc) => {
+      const book = toBookDto(doc);
+
+      // Equality-only filters (no orderBy on a different field), so this
+      // doesn't need a composite index — the latest ISSUE is picked in JS.
+      const txSnap = await db
+        .collection('transactions')
+        .where('bookId', '==', doc.id)
+        .where('studentId', '==', cardUid)
+        .where('action', '==', 'ISSUE')
+        .get();
+
+      const latest = txSnap.docs
+        .map((d) => d.data().timestamp)
+        .filter(Boolean)
+        .sort((a, b) => b.toMillis() - a.toMillis())[0];
+
+      const issuedAt = latest ? latest.toDate() : null;
+      const dueAt = issuedAt ? new Date(issuedAt.getTime() + LOAN_DAYS * 86_400_000) : null;
+      const overdueDays = dueAt ? Math.max(0, Math.floor((Date.now() - dueAt.getTime()) / 86_400_000)) : 0;
+
+      return {
+        ...book,
+        issued_at: issuedAt ? issuedAt.toISOString() : null,
+        due_at: dueAt ? dueAt.toISOString() : null,
+        overdue_days: overdueDays,
+        fine: overdueDays * FINE_PER_DAY,
+      };
+    })
+  );
+
+  books.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+  return books;
+}
+
+/** GET /api/students/:id/issued — the books this student currently holds
+ *  (by RFID card UID — used by the librarian-facing Students page). */
 api.get('/students/:id/issued', async (req, res) => {
   try {
-    const snapshot = await db
-      .collection('books')
-      .where('issuedTo', '==', req.params.id)
-      .where('status', '==', 'checked_out')
+    res.json(await fetchIssuedBooks(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/my-books/:studentId — same thing, but looked up by the student's
+ * own ID number (from their login account) rather than their RFID card UID,
+ * since a logged-in student doesn't know their own card's UID. `linked:
+ * false` means no RFID card has been registered against that student ID yet.
+ */
+api.get('/my-books/:studentId', async (req, res) => {
+  try {
+    const cardSnap = await db
+      .collection('students')
+      .where('studentId', '==', req.params.studentId)
+      .limit(1)
       .get();
 
-    const books = snapshot.docs.map(toBookDto).sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    if (cardSnap.empty) {
+      return res.json({ linked: false, books: [] });
+    }
 
-    res.json(books);
+    const books = await fetchIssuedBooks(cardSnap.docs[0].id);
+    res.json({ linked: true, books });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
 
-/** Owns the student roster: list + per-student issued-books lookup + registration. */
+/** Owns the student roster: list + per-student issued-books lookup. */
 export function useStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,19 +44,5 @@ export function useStudents() {
     return res.json();
   }
 
-  async function registerStudent({ uid, student_id, name, dept }) {
-    const res = await fetch(`${API_BASE}/api/students`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid, student_id, name, dept }),
-    });
-
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error ?? `API responded ${res.status}`);
-
-    reload();
-    return body;
-  }
-
-  return { students, loading, error, reload, fetchIssuedBooks, registerStudent };
+  return { students, loading, error, reload, fetchIssuedBooks };
 }

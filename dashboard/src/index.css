@@ -274,6 +274,33 @@ h4 {
   animation: pulse 2.4s ease-in-out infinite;
 }
 
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.user-chip-btn {
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.user-chip-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -970,47 +997,156 @@ h4 {
 
 /* ==========================  login  ====================================== */
 
+/* The login screen is a deliberate fixed-dark scene — a library at night —
+ * independent of the app's light/dark toggle, the way most products keep
+ * their auth screen's mood constant. Every color below is literal, not a
+ * design token, for that reason. */
+
 .login {
+  position: relative;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(900px 500px at 50% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    var(--plane);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0c0e12;
 }
 
+/* ---------- backdrop: two lit bookshelf walls flanking a blurred room ---------- */
+
+.login-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  filter: blur(1.5px);
+}
+
+.login-shelf-side {
+  flex: 0 0 clamp(160px, 24vw, 340px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  padding: 3vh 10px;
+  background: linear-gradient(180deg, #23180f 0%, #180f09 100%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6);
+}
+
+.login-shelf-row {
+  display: flex;
+  flex-direction: column;
+  height: 12vh;
+  min-height: 64px;
+  max-height: 120px;
+}
+
+.login-spine-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  flex: 1;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.login-spine {
+  display: inline-block;
+  border-radius: 1px 1px 0 0;
+  box-shadow: inset -2px 0 0 rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+.login-shelf-board {
+  height: 4px;
+  margin-top: 3px;
+  background: linear-gradient(180deg, #a9762f, #6b4a1f 40%, #241708);
+  box-shadow: 0 0 14px 2px rgba(255, 170, 90, 0.35), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* the soft, cool-lit interior glimpsed between the two shelf walls */
+.login-room {
+  position: relative;
+  flex: 1;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 8%, rgba(255, 214, 150, 0.14), transparent 60%),
+    linear-gradient(180deg, #232b36 0%, #161b22 55%, #0e1115 100%);
+}
+
+.login-room-window {
+  position: absolute;
+  top: 6%;
+  left: 20%;
+  right: 20%;
+  height: 55%;
+  border-radius: 4px;
+  background: linear-gradient(200deg, #3a4a5c 0%, #1c242e 70%);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+  opacity: 0.85;
+}
+
+.login-room-plant {
+  position: absolute;
+  bottom: 8%;
+  left: 12%;
+  width: 26%;
+  height: 34%;
+  background: radial-gradient(ellipse at 50% 100%, rgba(58, 92, 62, 0.55), transparent 70%);
+  border-radius: 50%;
+}
+
+/* dims + focuses the backdrop toward the centre so the card reads clearly */
+.login-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(560px 460px at 50% 52%, transparent, rgba(6, 7, 9, 0.5) 62%, rgba(6, 7, 9, 0.82) 100%),
+    linear-gradient(rgba(6, 7, 9, 0.3), rgba(6, 7, 9, 0.5));
+}
+
+/* ---------- centred glass sign-in card ---------- */
+
 .login-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 400px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
+  max-width: 372px;
+  margin: 24px;
+  padding: 34px 30px 26px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-md);
-  padding: 32px 28px 24px;
+  box-shadow: 0 24px 70px -20px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: #f3f2ee;
 }
 
 .login-brand {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
 
 .login-mark {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   margin: 0 auto 14px;
-  border-radius: 15px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 55%, #14181f 45%);
+  color: #fff;
 }
 
 .login-brand h1 {
-  font-size: 25px;
-  letter-spacing: -0.02em;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f3f2ee;
 }
 
 .login-tagline {
   margin: 5px 0 0;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: rgba(243, 242, 238, 0.55);
 }
 
 .login-form {
@@ -1027,12 +1163,114 @@ h4 {
 
 .field-label {
   font-size: 12px;
+  color: rgba(243, 242, 238, 0.6);
+  font-weight: 500;
+}
+
+/* Fixed light-on-glass colors — the card is always dark, see note above. */
+.field input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.2);
+  color: #f3f2ee;
+  font: inherit;
+  font-size: 14px;
+}
+
+/* Chrome/Edge paint autofilled inputs with an opaque white box no matter what
+ * `background` says — this pushes the browser's own fill color transparent
+ * (huge inset shadow trick) and forces the text color, so autofill still
+ * reads correctly but never breaks the dark glass card. */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f3f2ee;
+  -webkit-box-shadow: 0 0 0px 1000px rgba(28, 26, 22, 0.95) inset;
+  box-shadow: 0 0 0px 1000px rgba(28, 26, 22, 0.95) inset;
+  caret-color: #f3f2ee;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.field input::placeholder {
+  color: rgba(243, 242, 238, 0.35);
+}
+
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.password-field {
+  position: relative;
+  display: flex;
+}
+
+.password-field input {
+  flex: 1;
+  padding-right: 40px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgba(243, 242, 238, 0.45);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: rgba(243, 242, 238, 0.85);
+}
+
+.issued-table {
+  width: 100%;
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-collapse: collapse;
+}
+
+.issued-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 12px 4px 0;
+}
+
+.issued-table td {
+  padding: 4px 12px 4px 0;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-width: 360px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.profile-label {
+  font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
-.field input {
-  height: 40px;
+.profile-input {
+  height: 38px;
   padding: 0 12px;
   border-radius: var(--r-md);
   border: 1px solid var(--border-strong);
@@ -1042,29 +1280,15 @@ h4 {
   font-size: 14px;
 }
 
-.field input::placeholder {
+.profile-input:disabled {
   color: var(--text-muted);
+  cursor: not-allowed;
 }
 
-.field input:focus {
+.profile-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: transparent;
-}
-
-.add-student-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.add-student-form .field {
-  min-width: 160px;
-}
-
-.add-student-form .field input {
-  height: 34px;
 }
 
 .form-error {
@@ -1077,13 +1301,6 @@ h4 {
   color: var(--good);
   font-size: 12.5px;
   margin: 0;
-}
-
-.issued-list {
-  margin: 4px 0;
-  padding-left: 18px;
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 .login-btn {
@@ -1112,30 +1329,122 @@ h4 {
   margin: 2px 0 0;
   text-align: center;
   font-size: 11.5px;
-  color: var(--text-muted);
+  color: rgba(243, 242, 238, 0.4);
 }
 
-.login-features {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
+.login-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.login-feature {
+.login-forgot {
+  margin: -6px 0 0;
+  text-align: right;
+  font-size: 12px;
+}
+
+.login-error {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  background: rgba(208, 59, 59, 0.16);
+  border: 1px solid rgba(208, 59, 59, 0.35);
+  color: #ffb4b4;
   font-size: 12.5px;
-  color: var(--text-secondary);
 }
 
-.login-feature svg {
-  color: var(--accent);
+.login-error svg {
   flex-shrink: 0;
 }
+
+.login-sent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: var(--r-md);
+  background: rgba(12, 163, 12, 0.16);
+  border: 1px solid rgba(12, 163, 12, 0.35);
+  color: #a8e6a8;
+  font-size: 13px;
+}
+
+.login-sent svg {
+  flex-shrink: 0;
+}
+
+.signup-card {
+  max-width: 400px;
+  max-height: min(88vh, 720px);
+  overflow-y: auto;
+}
+
+.role-select {
+  display: flex;
+  gap: 6px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.role-btn {
+  flex: 1;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(243, 242, 238, 0.55);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.role-btn:hover {
+  color: rgba(243, 242, 238, 0.85);
+}
+
+.role-btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.select-input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.2);
+  color: #f3f2ee;
+  font: inherit;
+  font-size: 14px;
+}
+
+.select-input option {
+  color: #111;
+}
+
+@media (max-width: 760px) {
+  .login-shelf-side {
+    flex-basis: 60px;
+  }
+
+  .login-spine-row {
+    padding: 0 2px;
+  }
+}
+
 
 .text-btn {
   height: 34px;

@@ -1,5 +1,11 @@
 import { useState } from 'react';
 import { AlertIcon, BookIcon, UserIcon } from './Icons.jsx';
+import { clockTime } from '../lib/format.js';
+
+function dateLabel(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString();
+}
 
 function StudentRow({ student, fetchIssuedBooks }) {
   const [expanded, setExpanded] = useState(false);
@@ -48,13 +54,26 @@ function StudentRow({ student, fetchIssuedBooks }) {
             {loadingIssued ? (
               <span className="empty-hint">Loading…</span>
             ) : issued && issued.length > 0 ? (
-              <ul className="issued-list">
-                {issued.map((b) => (
-                  <li key={b.id}>
-                    {b.title} {b.copy_no ? `(Copy ${b.copy_no})` : ''}
-                  </li>
-                ))}
-              </ul>
+              <table className="issued-table">
+                <thead>
+                  <tr>
+                    <th>Book</th>
+                    <th>Issued on</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {issued.map((b) => (
+                    <tr key={b.id}>
+                      <td>
+                        {b.title} {b.copy_no ? `(Copy ${b.copy_no})` : ''}
+                      </td>
+                      <td>{dateLabel(b.issued_at)}</td>
+                      <td>{clockTime(b.issued_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
               <span className="empty-hint">No books currently issued.</span>
             )}
@@ -65,65 +84,7 @@ function StudentRow({ student, fetchIssuedBooks }) {
   );
 }
 
-function AddStudentForm({ registerStudent }) {
-  const [form, setForm] = useState({ uid: '', student_id: '', name: '', dept: '' });
-  const [status, setStatus] = useState(null); // { kind: 'error'|'success', message }
-  const [submitting, setSubmitting] = useState(false);
-
-  function set(field) {
-    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    setSubmitting(true);
-    setStatus(null);
-    try {
-      await registerStudent(form);
-      setStatus({ kind: 'success', message: `Registered ${form.name}.` });
-      setForm({ uid: '', student_id: '', name: '', dept: '' });
-    } catch (err) {
-      setStatus({ kind: 'error', message: err.message });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form className="add-student-form" onSubmit={submit}>
-      <label className="field">
-        <span className="field-label">Card UID</span>
-        <input type="text" value={form.uid} onChange={set('uid')} placeholder="B0 AB 4F 5C" required />
-      </label>
-      <label className="field">
-        <span className="field-label">Student ID</span>
-        <input
-          type="text"
-          value={form.student_id}
-          onChange={set('student_id')}
-          placeholder="202114202"
-          required
-        />
-      </label>
-      <label className="field">
-        <span className="field-label">Name</span>
-        <input type="text" value={form.name} onChange={set('name')} placeholder="Lt Iftiak" required />
-      </label>
-      <label className="field">
-        <span className="field-label">Department</span>
-        <input type="text" value={form.dept} onChange={set('dept')} placeholder="CSE" required />
-      </label>
-      <button type="submit" className="text-btn" disabled={submitting}>
-        {submitting ? 'Registering…' : 'Register card'}
-      </button>
-      {status && (
-        <p className={status.kind === 'error' ? 'form-error' : 'form-success'}>{status.message}</p>
-      )}
-    </form>
-  );
-}
-
-export default function StudentsPage({ students, loading, error, fetchIssuedBooks, registerStudent, onBack }) {
+export default function StudentsPage({ students, loading, error, fetchIssuedBooks, onBack }) {
   return (
     <div className="app">
       <header className="app-header">
@@ -133,7 +94,7 @@ export default function StudentsPage({ students, loading, error, fetchIssuedBook
           </span>
           <div>
             <h1>Students</h1>
-            <p className="brand-sub">Registered RFID cards · CSE-406 · MIST</p>
+            <p className="brand-sub">Registered RFID cards</p>
           </div>
         </div>
 
@@ -155,17 +116,6 @@ export default function StudentsPage({ students, loading, error, fetchIssuedBook
         <section className="panel">
           <div className="panel-head">
             <div className="panel-title">
-              <h2>Register a card</h2>
-            </div>
-          </div>
-          <div className="panel-body">
-            <AddStudentForm registerStudent={registerStudent} />
-          </div>
-        </section>
-
-        <section className="panel" style={{ marginTop: 16 }}>
-          <div className="panel-head">
-            <div className="panel-title">
               <h2>Roster</h2>
               <span className="panel-count">{students.length} students</span>
             </div>
@@ -180,7 +130,7 @@ export default function StudentsPage({ students, loading, error, fetchIssuedBook
                   <BookIcon size={18} />
                 </span>
                 <span className="empty-title">No students registered</span>
-                <span className="empty-hint">Register a card above, or run registerStudent.js in the backend.</span>
+                <span className="empty-hint">Run registerStudent.js in the backend to add a card.</span>
               </div>
             ) : (
               <div className="table-wrap">

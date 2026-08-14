@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AccessLogPage from './components/AccessLogPage.jsx';
 import CheckpointFeed from './components/CheckpointFeed.jsx';
+import ForgotPasswordPage from './components/ForgotPasswordPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
+import MyAccountPage from './components/MyAccountPage.jsx';
 import PlacementToast from './components/PlacementToast.jsx';
+import ResetPasswordPage from './components/ResetPasswordPage.jsx';
 import ScanOverlay from './components/ScanOverlay.jsx';
 import ShelfGrid from './components/ShelfGrid.jsx';
+import SignupPage from './components/SignupPage.jsx';
 import StatBar from './components/StatBar.jsx';
 import StudentsPage from './components/StudentsPage.jsx';
 import TransactionHistoryPage from './components/TransactionHistoryPage.jsx';
@@ -12,6 +16,7 @@ import WrongPlacementHistory from './components/WrongPlacementHistory.jsx';
 import { AlertIcon, BookIcon, ClockIcon, MoonIcon, SunIcon, UserIcon } from './components/Icons.jsx';
 import { useAccessLogs } from './hooks/useAccessLogs.js';
 import { useBooks } from './hooks/useBooks.js';
+import { useMyAccount } from './hooks/useMyAccount.js';
 import { usePlacementAlerts } from './hooks/usePlacementAlerts.js';
 import { useScanEvents } from './hooks/useScanEvents.js';
 import { useStudents } from './hooks/useStudents.js';
@@ -24,6 +29,10 @@ import { startAlarm, stopAlarm } from './lib/buzzer.js';
  */
 const ROUTE = {
   LOGIN: '#/login',
+  SIGNUP: '#/signup',
+  FORGOT_PASSWORD: '#/forgot-password',
+  RESET_PASSWORD: '#/reset-password',
+  MY_ACCOUNT: '#/my',
   DASHBOARD: '#/dashboard',
   CARD: '#/dashboard/card',
   HISTORY: '#/dashboard/history',
@@ -31,6 +40,38 @@ const ROUTE = {
   TRANSACTIONS: '#/dashboard/transactions',
   ACCESS_LOG: '#/dashboard/access-log',
 };
+
+/** Librarians get the full operational dashboard; students/faculty get a
+ *  single self-service page (issued books + profile) regardless of hash. */
+function homeRouteFor(role) {
+  return role === 'librarian' ? ROUTE.DASHBOARD : ROUTE.MY_ACCOUNT;
+}
+
+const USER_STORAGE_KEY = 'bf-user';
+
+/** The signed-in account — persisted so a page refresh doesn't sign you out. */
+function useAuth() {
+  const [user, setUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem(USER_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const signIn = useCallback((account) => {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(account));
+    setUser(account);
+  }, []);
+
+  const signOut = useCallback(() => {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    setUser(null);
+  }, []);
+
+  return { user, signIn, signOut };
+}
 
 /** Sounds the buzzer for as long as at least one misplacement alert is open. */
 function useAlarm(activeCount) {
@@ -77,6 +118,7 @@ function useHashRoute() {
 }
 
 function Dashboard({
+  user,
   theme,
   toggleTheme,
   onLogout,
@@ -130,7 +172,7 @@ function Dashboard({
           </span>
           <div>
             <h1>BookFinder</h1>
-            <p className="brand-sub">RFID shelf tracking · CSE-406 · MIST</p>
+            <p className="brand-sub">RFID shelf tracking</p>
           </div>
         </div>
 
@@ -172,6 +214,13 @@ function Dashboard({
             {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
           </button>
 
+          {user && (
+            <span className="user-chip" title={user.role}>
+              <UserIcon size={12} />
+              {user.name} · {user.role}
+            </span>
+          )}
+
           <button type="button" className="text-btn" onClick={onLogout}>
             Log out
           </button>
@@ -212,10 +261,16 @@ function Dashboard({
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const hash = useHashRoute();
+  const { user, signIn, signOut } = useAuth();
   const alerts = usePlacementAlerts();
   useAlarm(alerts.activeAlerts.length);
+  // Called unconditionally (before the auth check below) — see the hook's
+  // own note on why it has to tolerate a null user.
+  const myAccount = useMyAccount(user);
 
-  const onDashboard = hash.startsWith(ROUTE.DASHBOARD);
+  const onSignup = hash.startsWith(ROUTE.SIGNUP);
+  const onForgotPassword = hash.startsWith(ROUTE.FORGOT_PASSWORD);
+  const onResetPassword = hash.startsWith(ROUTE.RESET_PASSWORD);
   const onHistory = hash.startsWith(ROUTE.HISTORY);
   const onStudents = hash.startsWith(ROUTE.STUDENTS);
   const onTransactions = hash.startsWith(ROUTE.TRANSACTIONS);
@@ -227,12 +282,37 @@ export default function App() {
 
   // Assigning the hash (rather than replaceState) is what creates the history
   // entry the back button needs.
-  const login = useCallback(() => {
-    window.location.hash = ROUTE.DASHBOARD;
-  }, []);
+  const login = useCallback(
+    (account) => {
+      signIn(account);
+      window.location.hash = homeRouteFor(account.role);
+    },
+    [signIn]
+  );
+
+  const signedUp = useCallback(
+    (account) => {
+      signIn(account);
+      window.location.hash = homeRouteFor(account.role);
+    },
+    [signIn]
+  );
 
   const logout = useCallback(() => {
+    signOut();
     window.location.hash = ROUTE.LOGIN;
+  }, [signOut]);
+
+  const goToSignup = useCallback(() => {
+    window.location.hash = ROUTE.SIGNUP;
+  }, []);
+
+  const goToLogin = useCallback(() => {
+    window.location.hash = ROUTE.LOGIN;
+  }, []);
+
+  const goToForgotPassword = useCallback(() => {
+    window.location.hash = ROUTE.FORGOT_PASSWORD;
   }, []);
 
   const openHistory = useCallback(() => {
@@ -255,7 +335,21 @@ export default function App() {
     window.location.hash = ROUTE.DASHBOARD;
   }, []);
 
-  if (!onDashboard) return <LoginPage onLogin={login} />;
+  if (!user) {
+    if (onSignup) return <SignupPage onSignedUp={signedUp} onGoToLogin={goToLogin} />;
+    if (onForgotPassword) return <ForgotPasswordPage onGoToLogin={goToLogin} />;
+    if (onResetPassword) return <ResetPasswordPage hash={hash} onGoToLogin={goToLogin} />;
+    return <LoginPage onLogin={login} onGoToSignup={goToSignup} onGoToForgotPassword={goToForgotPassword} />;
+  }
+
+  // Students and faculty only ever see their own self-service page, no
+  // matter what the hash says — the operational dashboard below is
+  // librarian-only.
+  if (user.role !== 'librarian') {
+    return (
+      <MyAccountPage myAccount={myAccount} account={user} onLogout={logout} onUpdateAccount={signIn} />
+    );
+  }
 
   if (onHistory) {
     return (
@@ -276,7 +370,6 @@ export default function App() {
         loading={students.loading}
         error={students.error}
         fetchIssuedBooks={students.fetchIssuedBooks}
-        registerStudent={students.registerStudent}
         onBack={backToDashboard}
       />
     );
@@ -306,6 +399,7 @@ export default function App() {
 
   return (
     <Dashboard
+      user={user}
       theme={theme}
       toggleTheme={toggleTheme}
       onLogout={logout}

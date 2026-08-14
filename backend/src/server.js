@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 
 import { api } from './routes/api.js';
+import { auth } from './routes/auth.js';
 import { loadShelfMap } from './services/shelfLookup.js';
 import { startSerialListener, stopSerialListener } from './serial/serialListener.js';
 
@@ -13,6 +14,7 @@ const BAUD_RATE = Number(process.env.BAUD_RATE ?? 115200);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/api/auth', auth);
 app.use('/api', api);
 
 async function main() {

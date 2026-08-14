@@ -16,7 +16,7 @@ export default function AccessLogPage({ logs, loading, error, onBack }) {
           </span>
           <div>
             <h1>Entry / Exit Log</h1>
-            <p className="brand-sub">Student checkpoint activity · CSE-406 · MIST</p>
+            <p className="brand-sub">Student checkpoint activity</p>
           </div>
         </div>
 
