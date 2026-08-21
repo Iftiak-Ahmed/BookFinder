@@ -8,20 +8,21 @@
 :root {
   color-scheme: light;
 
-  /* surfaces */
-  --plane: #f9f9f7;
-  --surface-1: #fcfcfb;
-  --surface-2: #f2f2ef;
-  --surface-sunken: #f0efec;
+  /* surfaces — a visible step between page, card and nested-card, so panels
+     read as distinct layers instead of blending into a flat white page. */
+  --plane: #eef0f3;
+  --surface-1: #ffffff;
+  --surface-2: #eef0f2;
+  --surface-sunken: #e7e9ec;
 
   /* ink */
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
+  --text-primary: #14161a;
+  --text-secondary: #4c5058;
+  --text-muted: #82868f;
 
   /* lines */
-  --border: rgba(11, 11, 11, 0.1);
-  --border-strong: rgba(11, 11, 11, 0.18);
+  --border: rgba(20, 22, 26, 0.12);
+  --border-strong: rgba(20, 22, 26, 0.24);
 
   /* accent (non-status: live indicator, focus, links) */
   --accent: #2a78d6;
@@ -36,8 +37,8 @@
   --warning-wash: rgba(250, 178, 25, 0.14);
   --critical-wash: rgba(208, 59, 59, 0.09);
 
-  --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.05);
-  --shadow-md: 0 4px 16px rgba(11, 11, 11, 0.07);
+  --shadow-sm: 0 1px 3px rgba(20, 22, 26, 0.08);
+  --shadow-md: 0 6px 20px rgba(20, 22, 26, 0.1);
 
   /* geometry */
   --r-sm: 6px;
@@ -244,36 +245,6 @@ h4 {
   border-color: var(--border-strong);
 }
 
-/* connection indicator */
-.conn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.conn-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.conn.is-live .conn-dot {
-  background: var(--good);
-  box-shadow: 0 0 0 3px var(--good-wash);
-  animation: pulse 2.4s ease-in-out infinite;
-}
-
 .user-chip {
   display: inline-flex;
   align-items: center;
@@ -301,21 +272,11 @@ h4 {
   background: var(--surface-2);
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
 /* ==========================  stat tiles  ================================= */
 
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -323,6 +284,12 @@ h4 {
 @media (max-width: 860px) {
   .stat-row {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -493,6 +460,7 @@ h4 {
 .shelf {
   background: var(--surface-sunken);
   border: 1px solid var(--border);
+  border-top: 3px solid var(--rack-tone, var(--border));
   border-radius: var(--r-md);
   padding: 12px;
 }
@@ -507,6 +475,20 @@ h4 {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.shelf-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rack-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rack-tone, var(--text-muted));
+  flex-shrink: 0;
 }
 
 .shelf-title {
@@ -677,12 +659,6 @@ h4 {
 .pill.is-good {
   --pill-tone: var(--good);
   --pill-wash: var(--good-wash);
-}
-
-.alert-count-pill {
-  height: 34px;
-  padding: 0 12px;
-  font-size: 12px;
 }
 
 /* ==========================  placement toast  ============================ */
@@ -1165,6 +1141,27 @@ h4 {
   font-size: 12px;
   color: rgba(243, 242, 238, 0.6);
   font-weight: 500;
+}
+
+/* Theme-aware counterpart to .field-label above — that one is fixed
+   light-on-glass for the always-dark auth card; this is for forms on the
+   regular themed page (Settings, Register Book), so it has to follow the
+   theme's own text tokens instead of a hardcoded near-white. */
+.settings-field-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Layout-only counterpart to .field above. Deliberately a different class
+   (not just relying on .field's own layout rules) — `.field input` is a
+   descendant selector that would otherwise repaint any <input> nested in a
+   `.field` with the auth card's fixed dark-glass colors, which is wrong
+   outside that one dark-card context. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 /* Fixed light-on-glass colors — the card is always dark, see note above. */
@@ -1800,6 +1797,162 @@ h4 {
   padding: 1px 5px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+}
+
+/* ==========================  active session banner  ======================= */
+
+.session-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--r-lg);
+  background: var(--good-wash);
+  border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
+}
+
+.session-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--good);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.session-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-title {
+  font-size: 13.5px;
+}
+
+.session-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ==========================  settings page  ================================ */
+
+.settings-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.field-input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  width: 100%;
+}
+
+.field-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-input-row .field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.field-suffix {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.field-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.settings-save-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 4px 0 20px;
+}
+
+.btn-primary {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.is-good-banner {
+  background: var(--good-wash);
+  border: 1px solid color-mix(in srgb, var(--good) 32%, transparent);
+  color: var(--good);
+}
+
+.is-good-banner svg {
+  color: var(--good);
+}
+
+.is-accent-banner {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  color: var(--accent);
+}
+
+.is-accent-banner svg {
+  color: var(--accent);
+}
+
+.register-book-form {
+  margin-bottom: 4px;
+}
+
+/* ==========================  add/edit student form  ======================== */
+
+.add-student-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-student-form .field-input {
+  width: auto;
+  min-width: 140px;
 }
 
 @media (prefers-reduced-motion: reduce) {

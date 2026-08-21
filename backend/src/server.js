@@ -6,6 +6,8 @@ import { api } from './routes/api.js';
 import { auth } from './routes/auth.js';
 import { loadShelfMap } from './services/shelfLookup.js';
 import { startSerialListener, stopSerialListener } from './serial/serialListener.js';
+import { startLibrarySettingsListener } from './services/librarySettings.js';
+import { ensureReadersSeeded, startReaderOfflineSweep } from './services/readerMonitor.js';
 
 const PORT = Number(process.env.PORT ?? 4000);
 const SERIAL_PORT = process.env.SERIAL_PORT ?? 'COM3';
@@ -20,6 +22,9 @@ app.use('/api', api);
 async function main() {
   // The shelf map has to be in memory before the first scan arrives.
   await loadShelfMap();
+  startLibrarySettingsListener();
+  await ensureReadersSeeded();
+  startReaderOfflineSweep();
 
   app.listen(PORT, () => {
     console.log(`[api] REST API on http://localhost:${PORT}/api`);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AccessLogPage from './components/AccessLogPage.jsx';
+import ActiveSessionBanner from './components/ActiveSessionBanner.jsx';
 import CheckpointFeed from './components/CheckpointFeed.jsx';
 import ForgotPasswordPage from './components/ForgotPasswordPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
@@ -7,18 +7,19 @@ import MyAccountPage from './components/MyAccountPage.jsx';
 import PlacementToast from './components/PlacementToast.jsx';
 import ResetPasswordPage from './components/ResetPasswordPage.jsx';
 import ScanOverlay from './components/ScanOverlay.jsx';
+import SettingsPage from './components/SettingsPage.jsx';
 import ShelfGrid from './components/ShelfGrid.jsx';
 import SignupPage from './components/SignupPage.jsx';
 import StatBar from './components/StatBar.jsx';
 import StudentsPage from './components/StudentsPage.jsx';
 import TransactionHistoryPage from './components/TransactionHistoryPage.jsx';
-import WrongPlacementHistory from './components/WrongPlacementHistory.jsx';
-import { AlertIcon, BookIcon, ClockIcon, MoonIcon, SunIcon, UserIcon } from './components/Icons.jsx';
-import { useAccessLogs } from './hooks/useAccessLogs.js';
+import { AlertIcon, BookIcon, ClockIcon, GearIcon, MoonIcon, SunIcon, UserIcon } from './components/Icons.jsx';
+import { useActiveSession } from './hooks/useActiveSession.js';
 import { useBooks } from './hooks/useBooks.js';
 import { useMyAccount } from './hooks/useMyAccount.js';
 import { usePlacementAlerts } from './hooks/usePlacementAlerts.js';
 import { useScanEvents } from './hooks/useScanEvents.js';
+import { useSettings } from './hooks/useSettings.js';
 import { useStudents } from './hooks/useStudents.js';
 import { useTransactions } from './hooks/useTransactions.js';
 import { startAlarm, stopAlarm } from './lib/buzzer.js';
@@ -35,10 +36,9 @@ const ROUTE = {
   MY_ACCOUNT: '#/my',
   DASHBOARD: '#/dashboard',
   CARD: '#/dashboard/card',
-  HISTORY: '#/dashboard/history',
   STUDENTS: '#/dashboard/students',
   TRANSACTIONS: '#/dashboard/transactions',
-  ACCESS_LOG: '#/dashboard/access-log',
+  SETTINGS: '#/dashboard/settings',
 };
 
 /** Librarians get the full operational dashboard; students/faculty get a
@@ -123,16 +123,16 @@ function Dashboard({
   toggleTheme,
   onLogout,
   hash,
-  activeAlertCount,
-  onOpenHistory,
   onOpenStudents,
   onOpenTransactions,
-  onOpenAccessLog,
+  onOpenSettings,
+  transactions,
+  settings,
+  activeSession,
 }) {
   const books = useBooks();
   const scans = useScanEvents();
 
-  const live = books.connected && scans.connected;
   const { latestScan, clearLatestScan } = scans;
 
   // Shelf reads get their own lightweight toast (correct/wrong placement);
@@ -177,21 +177,6 @@ function Dashboard({
         </div>
 
         <div className="header-tools">
-          <span className={`conn${live ? ' is-live' : ''}`}>
-            <span className="conn-dot" />
-            {live ? 'Live' : 'Connecting'}
-          </span>
-
-          <button
-            type="button"
-            className={`pill alert-count-pill${activeAlertCount > 0 ? ' is-critical' : ' is-muted'}`}
-            style={{ border: 0, cursor: 'pointer' }}
-            onClick={onOpenHistory}
-          >
-            <AlertIcon size={12} />
-            Active Alerts: {activeAlertCount}
-          </button>
-
           <button type="button" className="text-btn" onClick={onOpenStudents}>
             <UserIcon size={12} /> Students
           </button>
@@ -200,8 +185,8 @@ function Dashboard({
             <ClockIcon size={12} /> Transactions
           </button>
 
-          <button type="button" className="text-btn" onClick={onOpenAccessLog}>
-            <UserIcon size={12} /> Access Log
+          <button type="button" className="text-btn" onClick={onOpenSettings}>
+            <GearIcon size={12} /> Settings
           </button>
 
           <button
@@ -238,7 +223,9 @@ function Dashboard({
           </div>
         )}
 
-        <StatBar books={books.books} />
+        <StatBar books={books.books} transactions={transactions} settings={settings} />
+
+        <ActiveSessionBanner session={activeSession.session} onEndSession={activeSession.endSession} />
 
         <div className="layout">
           <ShelfGrid books={books.books} loading={books.loading} flashed={books.flashed} />
@@ -271,14 +258,14 @@ export default function App() {
   const onSignup = hash.startsWith(ROUTE.SIGNUP);
   const onForgotPassword = hash.startsWith(ROUTE.FORGOT_PASSWORD);
   const onResetPassword = hash.startsWith(ROUTE.RESET_PASSWORD);
-  const onHistory = hash.startsWith(ROUTE.HISTORY);
   const onStudents = hash.startsWith(ROUTE.STUDENTS);
   const onTransactions = hash.startsWith(ROUTE.TRANSACTIONS);
-  const onAccessLog = hash.startsWith(ROUTE.ACCESS_LOG);
+  const onSettings = hash.startsWith(ROUTE.SETTINGS);
 
   const students = useStudents();
   const transactions = useTransactions();
-  const accessLogs = useAccessLogs();
+  const settings = useSettings();
+  const activeSession = useActiveSession();
 
   // Assigning the hash (rather than replaceState) is what creates the history
   // entry the back button needs.
@@ -315,10 +302,6 @@ export default function App() {
     window.location.hash = ROUTE.FORGOT_PASSWORD;
   }, []);
 
-  const openHistory = useCallback(() => {
-    window.location.hash = ROUTE.HISTORY;
-  }, []);
-
   const openStudents = useCallback(() => {
     window.location.hash = ROUTE.STUDENTS;
   }, []);
@@ -327,8 +310,8 @@ export default function App() {
     window.location.hash = ROUTE.TRANSACTIONS;
   }, []);
 
-  const openAccessLog = useCallback(() => {
-    window.location.hash = ROUTE.ACCESS_LOG;
+  const openSettings = useCallback(() => {
+    window.location.hash = ROUTE.SETTINGS;
   }, []);
 
   const backToDashboard = useCallback(() => {
@@ -351,18 +334,6 @@ export default function App() {
     );
   }
 
-  if (onHistory) {
-    return (
-      <WrongPlacementHistory
-        alerts={alerts.alerts}
-        activeCount={alerts.activeAlerts.length}
-        loading={alerts.loading}
-        onResolve={alerts.resolve}
-        onBack={backToDashboard}
-      />
-    );
-  }
-
   if (onStudents) {
     return (
       <StudentsPage
@@ -370,6 +341,9 @@ export default function App() {
         loading={students.loading}
         error={students.error}
         fetchIssuedBooks={students.fetchIssuedBooks}
+        onAddStudent={students.addStudent}
+        onEditStudent={students.editStudent}
+        onDeleteStudent={students.deleteStudent}
         onBack={backToDashboard}
       />
     );
@@ -386,12 +360,13 @@ export default function App() {
     );
   }
 
-  if (onAccessLog) {
+  if (onSettings) {
     return (
-      <AccessLogPage
-        logs={accessLogs.logs}
-        loading={accessLogs.loading}
-        error={accessLogs.error}
+      <SettingsPage
+        settings={settings.settings}
+        saving={settings.saving}
+        error={settings.error}
+        onSave={settings.save}
         onBack={backToDashboard}
       />
     );
@@ -404,11 +379,12 @@ export default function App() {
       toggleTheme={toggleTheme}
       onLogout={logout}
       hash={hash}
-      activeAlertCount={alerts.activeAlerts.length}
-      onOpenHistory={openHistory}
       onOpenStudents={openStudents}
       onOpenTransactions={openTransactions}
-      onOpenAccessLog={openAccessLog}
+      onOpenSettings={openSettings}
+      transactions={transactions.transactions}
+      settings={settings.settings}
+      activeSession={activeSession}
     />
   );
 }

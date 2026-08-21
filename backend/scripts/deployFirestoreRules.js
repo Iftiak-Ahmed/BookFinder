@@ -34,6 +34,22 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    match /librarySettings/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /rfidReaders/{readerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /activeSession/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }
 `;

@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
 
+// `transactions` (like `students`) has no client-read Firestore rule — it's
+// an audit trail meant to be read only through the backend API, not a public
+// realtime collection like books/scanEvents/placementAlerts. REST + light
+// polling keeps the stat tiles reasonably fresh without an onSnapshot
+// listener that Firestore would simply reject with permission-denied.
+const POLL_MS = 15_000;
+
 /** Owns the issue/return transaction history — the audit trail distinct from
  *  the raw checkpoint feed and the misplacement history. */
 export function useTransactions() {
@@ -12,9 +19,8 @@ export function useTransactions() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
 
-    (async () => {
+    async function load() {
       try {
         const res = await fetch(`${API_BASE}/api/transactions`);
         if (!res.ok) throw new Error(`API responded ${res.status}`);
@@ -28,10 +34,14 @@ export function useTransactions() {
       } finally {
         if (active) setLoading(false);
       }
-    })();
+    }
+
+    load();
+    const interval = setInterval(load, POLL_MS);
 
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, [reloadToken]);
 

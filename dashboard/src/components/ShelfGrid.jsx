@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { STATE, TONE_VAR, bookState } from '../lib/format.js';
+import { STATE, TONE_VAR, bookState, rackTone } from '../lib/format.js';
 import { ShelfIcon } from './Icons.jsx';
 import ShelfCard from './ShelfCard.jsx';
 
@@ -164,10 +164,13 @@ export default function ShelfGrid({ books, loading, flashed }) {
                 filter === 'all' ? shelfBooks : shelfBooks.filter((b) => bookState(b) === filter);
 
               return (
-                <div className="shelf" key={label}>
+                <div className="shelf" key={label} style={{ '--rack-tone': rackTone(label) }}>
                   <div className="shelf-head">
                     <div className="shelf-title-row">
-                      <span className="shelf-title">{label}</span>
+                      <span className="shelf-title-group">
+                        <span className="rack-dot" aria-hidden="true" />
+                        <span className="shelf-title">{label}</span>
+                      </span>
                       <span className="shelf-tally">
                         {present}/{shelfBooks.length} in place
                       </span>

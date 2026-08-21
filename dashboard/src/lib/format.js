@@ -34,6 +34,29 @@ export const STATE_TONE = {
   [STATE.UNSEEN]: 'muted',
 };
 
+/** A fixed accent colour per rack/department — identity, not status, so it
+ *  never overlaps the good/warning/critical vocabulary above. Any dept not
+ *  in the list (a future rack) still gets a stable colour via the hash
+ *  fallback, so this never needs updating in lockstep with the catalog. */
+const RACK_TONE = {
+  CSE: '#7c5cff',
+  EEE: '#0f9b8e',
+  'Science & Humanities': '#e2792c',
+};
+
+const RACK_PALETTE = ['#7c5cff', '#0f9b8e', '#e2792c', '#c2417a', '#3a7dbf', '#8a8f00'];
+
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function rackTone(dept) {
+  if (RACK_TONE[dept]) return RACK_TONE[dept];
+  return RACK_PALETTE[hashString(dept ?? '') % RACK_PALETTE.length];
+}
+
 export const STATE_LABEL = {
   [STATE.SHELVED]: 'On shelf',
   [STATE.MISPLACED]: 'Misplaced',

@@ -5,9 +5,12 @@ import {
   isShelfReader,
 } from './shelfLookup.js';
 import { sendCommand } from '../serial/serialListener.js';
+import { getSettings } from './librarySettings.js';
+import { touchReader } from './readerMonitor.js';
+import { raiseNotification } from './notifications.js';
+import { tryCaptureRegistration } from './registrationCapture.js';
 
-/** How long a student stays "pending" at the checkpoint after tapping their card. */
-const PENDING_STUDENT_WINDOW_MS = 15_000;
+const ACTIVE_SESSION_REF = () => db.collection('activeSession').doc('current');
 
 /**
  * RC522 readers re-read a tag many times a second while it sits on the antenna.
@@ -16,8 +19,7 @@ const PENDING_STUDENT_WINDOW_MS = 15_000;
  */
 const DUPLICATE_SCAN_WINDOW_MS = 3_000;
 
-/** The student currently waiting at the checkpoint, or null. */
-let pendingStudent = null; // { cardUid, name, studentId, dept, at }
+const DAY_MS = 86_400_000;
 
 /** `${readerId}|${uid}` -> timestamp of the last accepted scan. */
 const lastScanAt = new Map();
@@ -87,14 +89,33 @@ function isDuplicate(readerId, uid) {
   return false;
 }
 
-function getPendingStudent() {
-  if (!pendingStudent) return null;
+/**
+ * The active checkpoint session lives in Firestore (not an in-memory var) so
+ * the dashboard can display and end it in real time. Expired sessions are
+ * cleared lazily on next read.
+ */
+async function getActiveSession() {
+  const doc = await ACTIVE_SESSION_REF().get();
+  if (!doc.exists) return null;
 
-  if (Date.now() - pendingStudent.at > PENDING_STUDENT_WINDOW_MS) {
-    pendingStudent = null;
+  const data = doc.data();
+  if (Date.now() > data.expiresAt) {
+    await ACTIVE_SESSION_REF().delete();
     return null;
   }
-  return pendingStudent;
+  return data;
+}
+
+async function setActiveSession(student) {
+  const { sessionTimeoutSeconds } = getSettings();
+  await ACTIVE_SESSION_REF().set({
+    cardUid: student.cardUid,
+    name: student.name,
+    studentId: student.studentId ?? null,
+    dept: student.dept ?? null,
+    startedAt: FieldValue.serverTimestamp(),
+    expiresAt: Date.now() + sessionTimeoutSeconds * 1000,
+  });
 }
 
 async function insertScanEvent({
@@ -133,26 +154,86 @@ async function insertScanEvent({
   }
 }
 
+/** Latest ISSUE transaction for this book+student pair — used both to date
+ *  the loan and, on return, to work out overdue days / fine. */
+async function findLatestIssueTransaction(bookId, cardUid) {
+  const snap = await db
+    .collection('transactions')
+    .where('bookId', '==', bookId)
+    .where('studentId', '==', cardUid)
+    .where('action', '==', 'ISSUE')
+    .get();
+
+  const docs = snap.docs
+    .filter((d) => d.data().timestamp)
+    .sort((a, b) => b.data().timestamp.toMillis() - a.data().timestamp.toMillis());
+
+  return docs[0] ?? null;
+}
+
 /**
  * Append-only issue/return audit trail — separate from `scanEvents` (which
  * logs every raw tap) so the librarian can see just the borrow/return
  * history without the shelf-scan noise. Never updated or deleted.
  */
 async function insertTransaction({ book, student, action }) {
+  const settings = getSettings();
+
+  const record = {
+    bookId: book.uid,
+    bookTitle: book.title,
+    copyNo: book.copyNo ?? null,
+    studentId: student.cardUid,
+    studentName: student.name,
+    studentNumber: student.studentId ?? null,
+    action, // 'ISSUE' | 'RETURN'
+    remark: `${action === 'ISSUE' ? 'Issued to' : 'Returned by'} ${student.studentId ?? student.cardUid} - ${student.name}`,
+    timestamp: FieldValue.serverTimestamp(),
+  };
+
+  if (action === 'ISSUE') {
+    record.expectedReturnDate = Date.now() + settings.borrowingDays * DAY_MS;
+  }
+
+  if (action === 'RETURN') {
+    try {
+      const issueDoc = await findLatestIssueTransaction(book.uid, student.cardUid);
+      const expectedReturnDate =
+        issueDoc?.data().expectedReturnDate ??
+        (issueDoc?.data().timestamp
+          ? issueDoc.data().timestamp.toMillis() + settings.borrowingDays * DAY_MS
+          : null);
+
+      if (expectedReturnDate) {
+        const cutoff = expectedReturnDate + settings.graceDays * DAY_MS;
+        const overdueDays = Math.max(0, Math.floor((Date.now() - cutoff) / DAY_MS));
+        record.overdueDays = overdueDays;
+        record.fineAmount = overdueDays * settings.finePerDay;
+      } else {
+        record.overdueDays = 0;
+        record.fineAmount = 0;
+      }
+    } catch (err) {
+      console.error('[scan] Failed to compute overdue/fine on return:', err.message);
+      record.overdueDays = 0;
+      record.fineAmount = 0;
+    }
+  }
+
   try {
-    await db.collection('transactions').add({
-      bookId: book.uid,
-      bookTitle: book.title,
-      copyNo: book.copyNo ?? null,
-      studentId: student.cardUid,
-      studentName: student.name,
-      studentNumber: student.studentId ?? null,
-      action, // 'ISSUE' | 'RETURN'
-      remark: `${action === 'ISSUE' ? 'Issued to' : 'Returned by'} ${student.studentId ?? student.cardUid} - ${student.name}`,
-      timestamp: FieldValue.serverTimestamp(),
-    });
+    await db.collection('transactions').add(record);
   } catch (err) {
     console.error('[scan] Failed to insert transaction:', err.message);
+  }
+
+  if (record.fineAmount > 0) {
+    await raiseNotification({
+      type: 'unpaid_fine',
+      priority: 'medium',
+      message: `${student.name} (${student.studentId ?? student.cardUid}) owes a fine of ${record.fineAmount} for "${book.title}" — ${record.overdueDays} day(s) overdue.`,
+      relatedBookId: book.uid,
+      relatedStudentId: student.cardUid,
+    });
   }
 }
 
@@ -210,6 +291,15 @@ async function raisePlacementAlert({ book, detectedShelf }) {
     createdAt: FieldValue.serverTimestamp(),
     resolvedAt: null,
   });
+
+  // Only on a brand-new alert — refreshing an already-open one (still
+  // misplaced on the next sweep) must not re-notify.
+  await raiseNotification({
+    type: 'misplaced_book',
+    priority: 'high',
+    message: `"${book.title}"${book.copyNo ? ` (Copy ${book.copyNo})` : ''} was detected on ${detectedShelf} — belongs on ${book.correctShelf}.`,
+    relatedBookId: book.uid,
+  });
 }
 
 async function findStudentByUid(uid) {
@@ -242,7 +332,7 @@ async function handleCheckpointScan(readerId, uid) {
   const student = await findStudentByUid(uid);
 
   if (student) {
-    pendingStudent = { ...student, at: Date.now() };
+    await setActiveSession(student);
     await insertScanEvent({ readerId, uid, eventType: 'student_scan', student });
     await logAccessEvent(student);
     console.log(`[checkpoint] ${student.name} (${student.studentId}) tapped in`);
@@ -254,11 +344,16 @@ async function handleCheckpointScan(readerId, uid) {
   if (!book) {
     // Unregistered tag — still logged so it shows up while debugging.
     await insertScanEvent({ readerId, uid, eventType: 'book_scan' });
+    await raiseNotification({
+      type: 'unknown_tag',
+      priority: 'low',
+      message: `Unregistered RFID tag ${uid} was scanned at the checkpoint.`,
+    });
     console.log(`[checkpoint] Unknown UID ${uid}`);
     return;
   }
 
-  const active = getPendingStudent();
+  const active = await getActiveSession();
   const isCurrentlyIssuedToActive =
     book.status === 'checked_out' && active && book.issuedTo === active.cardUid;
 
@@ -298,6 +393,30 @@ async function handleCheckpointScan(readerId, uid) {
 
   const nextStatus = isCurrentlyIssuedToActive ? 'in_library' : 'checked_out';
   const action = nextStatus === 'checked_out' ? 'ISSUE' : 'RETURN';
+
+  // Borrowing limit — only relevant when issuing, never blocks a return.
+  if (action === 'ISSUE') {
+    const { maxBooksPerStudent } = getSettings();
+    const outstanding = await db
+      .collection('books')
+      .where('issuedTo', '==', active.cardUid)
+      .where('status', '==', 'checked_out')
+      .get();
+
+    if (outstanding.size >= maxBooksPerStudent) {
+      await insertScanEvent({
+        readerId,
+        uid,
+        eventType: 'book_scan',
+        student: active,
+        book,
+        bookStatus: book.status,
+        note: `Borrowing limit reached (${maxBooksPerStudent} books) — issue denied`,
+      });
+      console.log(`[checkpoint] ${active.name} is at the borrowing limit — issue denied`);
+      return;
+    }
+  }
 
   const update = {
     status: nextStatus,
@@ -345,6 +464,11 @@ async function handleShelfScan(readerId, uid) {
 
   if (!book) {
     await insertScanEvent({ readerId, uid, eventType: 'shelf_scan' });
+    await raiseNotification({
+      type: 'unknown_tag',
+      priority: 'low',
+      message: `Unregistered RFID tag ${uid} was detected on ${shelfLabel}.`,
+    });
     console.log(`[${shelfLabel}] Unknown UID ${uid}`);
     return;
   }
@@ -403,8 +527,20 @@ export async function processScanLine(line) {
 
   try {
     if (isCheckpointReader(readerId)) {
+      await touchReader(readerId, uid);
+
+      // "Scan the Book" (Settings -> Register Book) arms this — the next
+      // checkpoint tap is captured as a new book's UID instead of being
+      // looked up as a student/book tap, so a still-unregistered tag never
+      // trips the "unknown tag" path while the librarian is registering it.
+      if (tryCaptureRegistration(uid)) {
+        console.log(`[register] Captured UID ${uid} for book registration`);
+        return;
+      }
+
       await handleCheckpointScan(readerId, uid);
     } else if (isShelfReader(readerId)) {
+      await touchReader(readerId, uid);
       await handleShelfScan(readerId, uid);
     } else {
       // Reader ID the database has never heard of — log it so a typo in the
@@ -419,6 +555,5 @@ export async function processScanLine(line) {
 
 /** Exposed for tests / manual poking. */
 export function _resetState() {
-  pendingStudent = null;
   lastScanAt.clear();
 }
