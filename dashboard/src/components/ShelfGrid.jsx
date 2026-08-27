@@ -24,14 +24,6 @@ function rackSubLabel(correctShelf) {
   return parts.length >= 3 ? parts.slice(1).join(' · ') : correctShelf ?? 'Unassigned';
 }
 
-/** Upper vs Lower rack gets its own identity color — separate from the book's
- *  status color (good/warning/critical), so both signals stay visible at once. */
-function rackPositionTone(rackTitle) {
-  if (rackTitle.startsWith('Upper')) return '#0ea5e9';
-  if (rackTitle.startsWith('Lower')) return '#8b5cf6';
-  return null;
-}
-
 /** Splits a department's books into its Upper/Lower rack sub-groups, in a stable order. */
 function racks(books) {
   const grouped = new Map();
@@ -202,11 +194,7 @@ export default function ShelfGrid({ books, loading, flashed }) {
                     </p>
                   ) : (
                     racks(visible).map(([rackTitle, rackBooks]) => (
-                      <div
-                        className="rack-group"
-                        key={rackTitle}
-                        style={{ '--position-tone': rackPositionTone(rackTitle) }}
-                      >
+                      <div className="rack-group" key={rackTitle}>
                         <p className="rack-group-title">{rackTitle}</p>
                         <div className="shelf-books">
                           {rackBooks.map((book) => (

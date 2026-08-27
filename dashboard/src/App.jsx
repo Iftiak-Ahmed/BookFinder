@@ -238,13 +238,19 @@ export default function App() {
   const [theme, toggleTheme] = useTheme();
   const hash = useHashRoute();
   const { user, signIn, signOut } = useAuth();
-  const alerts = usePlacementAlerts();
+  // Every hook below is called unconditionally (rules of hooks — this runs
+  // even on the login screen, before `user` exists) but most of them only
+  // matter once we know the signed-in account is a librarian. Gating their
+  // fetch/listener setup behind `isLibrarian` means a student or a
+  // logged-out visitor never triggers the students/transactions/settings/
+  // active-session/placement-alerts/clearance-queue network calls at all.
+  const isLibrarian = user?.role === 'librarian';
+
+  const alerts = usePlacementAlerts(isLibrarian);
   useAlarm(alerts.activeAlerts.length);
-  // Called unconditionally (before the auth check below) — see the hook's
-  // own note on why it has to tolerate a null user.
   const myAccount = useMyAccount(user);
   const myClearance = useMyClearance(user);
-  const clearanceQueue = useClearanceRequests();
+  const clearanceQueue = useClearanceRequests(isLibrarian);
 
   const onSignup = hash.startsWith(ROUTE.SIGNUP);
   const onForgotPassword = hash.startsWith(ROUTE.FORGOT_PASSWORD);
@@ -254,10 +260,10 @@ export default function App() {
   const onSettings = hash.startsWith(ROUTE.SETTINGS);
   const onClearance = hash.startsWith(ROUTE.CLEARANCE);
 
-  const students = useStudents();
-  const transactions = useTransactions();
-  const settings = useSettings();
-  const activeSession = useActiveSession();
+  const students = useStudents(isLibrarian);
+  const transactions = useTransactions(isLibrarian);
+  const settings = useSettings(isLibrarian);
+  const activeSession = useActiveSession(isLibrarian);
 
   // Assigning the hash (rather than replaceState) is what creates the history
   // entry the back button needs.
@@ -383,6 +389,7 @@ export default function App() {
           error={settings.error}
           onSave={settings.save}
           onBack={backToDashboard}
+          onHistoryCleared={transactions.reload}
         />
       </>
     );

@@ -87,9 +87,6 @@ function StudentRow({ student, fetchIssuedBooks, onEdit, onDelete }) {
             onChange={(e) => setForm((f) => ({ ...f, dept: e.target.value }))}
           />
         </td>
-        <td>
-          <span className={`pill${student.status === 'Inside' ? ' is-good' : ' is-muted'}`}>{student.status}</span>
-        </td>
         <td colSpan={2}>
           <button type="button" className="text-btn" onClick={saveEdit} disabled={busy}>
             {busy ? 'Saving…' : 'Save'}
@@ -110,11 +107,6 @@ function StudentRow({ student, fetchIssuedBooks, onEdit, onDelete }) {
         <td>{student.name}</td>
         <td>{student.dept}</td>
         <td>
-          <span className={`pill${student.status === 'Inside' ? ' is-good' : ' is-muted'}`}>
-            {student.status}
-          </span>
-        </td>
-        <td>
           <button type="button" className="text-btn" onClick={toggle}>
             {expanded ? 'Hide issued books' : 'Show issued books'}
           </button>
@@ -130,14 +122,14 @@ function StudentRow({ student, fetchIssuedBooks, onEdit, onDelete }) {
       </tr>
       {rowError && !editing && (
         <tr>
-          <td colSpan={6} style={{ color: 'var(--critical)' }}>
+          <td colSpan={5} style={{ color: 'var(--critical)' }}>
             {rowError}
           </td>
         </tr>
       )}
       {expanded && (
         <tr>
-          <td colSpan={6}>
+          <td colSpan={5}>
             {loadingIssued ? (
               <span className="empty-hint">Loading…</span>
             ) : issued && issued.length > 0 ? (
@@ -386,7 +378,6 @@ export default function StudentsPage({
                       <th>Student ID</th>
                       <th>Name</th>
                       <th>Dept</th>
-                      <th>Status</th>
                       <th></th>
                       <th></th>
                     </tr>

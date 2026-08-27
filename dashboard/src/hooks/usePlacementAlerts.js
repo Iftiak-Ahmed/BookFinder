@@ -10,12 +10,17 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
  * listener drives both the header's "Active Alerts" badge and the History page,
  * so the two never fall out of sync.
  */
-export function usePlacementAlerts() {
+export function usePlacementAlerts(enabled = true) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     (async () => {
@@ -49,7 +54,7 @@ export function usePlacementAlerts() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [enabled]);
 
   const activeAlerts = useMemo(() => alerts.filter((a) => a.status === 'active'), [alerts]);
 

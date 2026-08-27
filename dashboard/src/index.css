@@ -822,17 +822,6 @@ h4 {
 
 /* ==========================  checkpoint feed  ============================ */
 
-.feed-panel {
-  position: sticky;
-  top: 78px;
-}
-
-@media (max-width: 1120px) {
-  .feed-panel {
-    position: static;
-  }
-}
-
 .feed {
   list-style: none;
   margin: 0;
@@ -2283,13 +2272,6 @@ h4 {
   border-top-width: 3px;
 }
 
-/* Upper vs Lower rack — a second color dimension on the book cards
-   themselves, independent of the status color the left border already
-   carries (on-shelf/checked-out/misplaced), so both read at a glance. */
-.librarian-theme .rack-group-title {
-  color: var(--position-tone, var(--text-muted));
-}
-
 .librarian-theme .book {
   border-radius: 8px;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
@@ -2297,11 +2279,6 @@ h4 {
 
 .librarian-theme .book:hover {
   box-shadow: var(--shadow-sm);
-}
-
-.librarian-theme .book:not(.is-misplaced) {
-  background: color-mix(in srgb, var(--position-tone, transparent) 12%, var(--surface-1));
-  border-color: color-mix(in srgb, var(--position-tone, var(--border)) 28%, transparent);
 }
 
 /* ---------- tables ---------- */

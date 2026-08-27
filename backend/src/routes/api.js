@@ -332,6 +332,34 @@ api.get('/transactions', async (req, res) => {
   }
 });
 
+/** Deletes every doc in a collection via a single batch — same technique
+ *  scripts/resetForDemo.js uses. Fine at this app's scale (well under
+ *  Firestore's 500-writes-per-batch cap). */
+async function wipeCollection(name) {
+  const snap = await db.collection(name).get();
+  if (snap.empty) return 0;
+
+  const batch = db.batch();
+  snap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+  return snap.size;
+}
+
+/** DELETE /api/history — librarian clears the checkpoint feed and
+ *  transaction log. Leaves books, students and shelf state untouched —
+ *  this only wipes the two activity logs, not physical state. */
+api.delete('/history', async (_req, res) => {
+  try {
+    const [eventsRemoved, transactionsRemoved] = await Promise.all([
+      wipeCollection('scanEvents'),
+      wipeCollection('transactions'),
+    ]);
+    res.json({ ok: true, events_removed: eventsRemoved, transactions_removed: transactionsRemoved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** GET /api/access-logs — student entry/exit events, newest first. */
 api.get('/access-logs', async (req, res) => {
   try {

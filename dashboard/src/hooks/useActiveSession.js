@@ -21,11 +21,16 @@ function fromSnap(snap) {
 
 /** The student currently "at" the checkpoint — armed by a card tap, cleared
  *  by a timeout, another card, or the librarian ending it manually. */
-export function useActiveSession() {
+export function useActiveSession(enabled = true) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     (async () => {
@@ -50,7 +55,7 @@ export function useActiveSession() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [enabled]);
 
   const endSession = useCallback(async () => {
     try {

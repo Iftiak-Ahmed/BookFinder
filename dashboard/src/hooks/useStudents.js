@@ -11,13 +11,18 @@ const POLL_MS = 15_000;
 
 /** Owns the student roster: list + per-student issued-books lookup, plus
  *  add/edit/delete. */
-export function useStudents() {
+export function useStudents(enabled = true) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     async function load() {
@@ -43,7 +48,7 @@ export function useStudents() {
       active = false;
       clearInterval(interval);
     };
-  }, [reloadToken]);
+  }, [enabled, reloadToken]);
 
   function reload() {
     setReloadToken((t) => t + 1);

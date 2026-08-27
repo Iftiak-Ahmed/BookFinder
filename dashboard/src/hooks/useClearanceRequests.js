@@ -11,12 +11,17 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
  * the Clearance page, so the two never fall out of sync — same shape as
  * usePlacementAlerts.
  */
-export function useClearanceRequests() {
+export function useClearanceRequests(enabled = true) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     (async () => {
@@ -48,7 +53,7 @@ export function useClearanceRequests() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [enabled]);
 
   const pendingRequests = useMemo(() => requests.filter((r) => r.status === 'pending'), [requests]);
 

@@ -15,13 +15,18 @@ const DEFAULTS = {
 /** Borrowing/fine/session policy — one REST load for the first paint, one
  *  Firestore listener so a change from the Settings page shows up live
  *  everywhere else (stat tiles, overdue calculations) without a refresh. */
-export function useSettings() {
+export function useSettings(enabled = true) {
   const [settings, setSettings] = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     (async () => {
@@ -46,7 +51,7 @@ export function useSettings() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [enabled]);
 
   async function save(patch) {
     setSaving(true);

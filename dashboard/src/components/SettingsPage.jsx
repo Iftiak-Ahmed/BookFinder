@@ -2,6 +2,76 @@
 import { AlertIcon, CheckIcon, GearIcon } from './Icons.jsx';
 import RegisterBookForm from './RegisterBookForm.jsx';
 
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
+
+/** Wipes the checkpoint feed and transaction log — books, students and
+ *  shelf state are untouched. Separate from the borrowing-rules form since
+ *  it's a destructive action on different data, not a setting to save. */
+function ClearHistorySection({ onCleared }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleClear() {
+    if (
+      !window.confirm(
+        'Clear all checkpoint scan activity and transaction history? This cannot be undone. Books, students and shelf placements are not affected.'
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/history`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `API responded ${res.status}`);
+
+      setMessage({
+        kind: 'success',
+        text: `Cleared ${data.events_removed} checkpoint event(s) and ${data.transactions_removed} transaction(s).`,
+      });
+      onCleared?.();
+    } catch (err) {
+      setMessage({ kind: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div className="panel-title">
+          <h2>Clear History</h2>
+        </div>
+      </div>
+      <div className="panel-body">
+        <div className="form-field">
+          <span className="settings-field-label">Checkpoint feed &amp; transaction log</span>
+          <span className="field-hint">
+            Permanently deletes the checkpoint scan activity and issue/return transaction history.
+            Books, students and current shelf placements are not affected.
+          </span>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ background: 'var(--critical)', marginTop: 8, alignSelf: 'flex-start' }}
+            onClick={handleClear}
+            disabled={busy}
+          >
+            {busy ? 'Clearing…' : 'Clear Checkpoint & Transaction History'}
+          </button>
+        </div>
+
+        {message && (
+          <p className={message.kind === 'error' ? 'form-error' : 'form-success'}>{message.text}</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function NumberField({ label, hint, value, onChange, min = 0, suffix }) {
   return (
     <label className="form-field">
@@ -21,7 +91,7 @@ function NumberField({ label, hint, value, onChange, min = 0, suffix }) {
   );
 }
 
-export default function SettingsPage({ settings, saving, error, onSave, onBack }) {
+export default function SettingsPage({ settings, saving, error, onSave, onBack, onHistoryCleared }) {
   const [form, setForm] = useState(settings);
   const [savedMessage, setSavedMessage] = useState(null);
 
@@ -140,6 +210,8 @@ export default function SettingsPage({ settings, saving, error, onSave, onBack }
             </button>
           </div>
         </form>
+
+        <ClearHistorySection onCleared={onHistoryCleared} />
       </main>
     </div>
   );

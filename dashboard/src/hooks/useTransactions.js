@@ -11,13 +11,18 @@ const POLL_MS = 15_000;
 
 /** Owns the issue/return transaction history — the audit trail distinct from
  *  the raw checkpoint feed and the misplacement history. */
-export function useTransactions() {
+export function useTransactions(enabled = true) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     async function load() {
@@ -43,7 +48,7 @@ export function useTransactions() {
       active = false;
       clearInterval(interval);
     };
-  }, [reloadToken]);
+  }, [enabled, reloadToken]);
 
   return { transactions, loading, error, reload: () => setReloadToken((t) => t + 1) };
 }
