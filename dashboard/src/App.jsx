@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import ActiveSessionBanner from './components/ActiveSessionBanner.jsx';
 import CheckpointFeed from './components/CheckpointFeed.jsx';
+import ClearancePage from './components/ClearancePage.jsx';
 import ForgotPasswordPage from './components/ForgotPasswordPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import MyAccountPage from './components/MyAccountPage.jsx';
@@ -9,14 +9,17 @@ import ResetPasswordPage from './components/ResetPasswordPage.jsx';
 import ScanOverlay from './components/ScanOverlay.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import ShelfGrid from './components/ShelfGrid.jsx';
+import Sidebar from './components/Sidebar.jsx';
 import SignupPage from './components/SignupPage.jsx';
 import StatBar from './components/StatBar.jsx';
 import StudentsPage from './components/StudentsPage.jsx';
 import TransactionHistoryPage from './components/TransactionHistoryPage.jsx';
-import { AlertIcon, BookIcon, ClockIcon, GearIcon, MoonIcon, SunIcon, UserIcon } from './components/Icons.jsx';
+import { AlertIcon, BookIcon, MoonIcon, SunIcon, UserIcon } from './components/Icons.jsx';
 import { useActiveSession } from './hooks/useActiveSession.js';
 import { useBooks } from './hooks/useBooks.js';
+import { useClearanceRequests } from './hooks/useClearanceRequests.js';
 import { useMyAccount } from './hooks/useMyAccount.js';
+import { useMyClearance } from './hooks/useMyClearance.js';
 import { usePlacementAlerts } from './hooks/usePlacementAlerts.js';
 import { useScanEvents } from './hooks/useScanEvents.js';
 import { useSettings } from './hooks/useSettings.js';
@@ -39,6 +42,15 @@ const ROUTE = {
   STUDENTS: '#/dashboard/students',
   TRANSACTIONS: '#/dashboard/transactions',
   SETTINGS: '#/dashboard/settings',
+  CLEARANCE: '#/dashboard/clearance',
+};
+
+const NAV_ROUTE = {
+  dashboard: ROUTE.DASHBOARD,
+  students: ROUTE.STUDENTS,
+  transactions: ROUTE.TRANSACTIONS,
+  settings: ROUTE.SETTINGS,
+  clearance: ROUTE.CLEARANCE,
 };
 
 /** Librarians get the full operational dashboard; students/faculty get a
@@ -49,11 +61,14 @@ function homeRouteFor(role) {
 
 const USER_STORAGE_KEY = 'bf-user';
 
-/** The signed-in account — persisted so a page refresh doesn't sign you out. */
+/** The signed-in account — persisted per-tab (sessionStorage, not
+ *  localStorage) so a page refresh doesn't sign you out, but different tabs
+ *  can hold different logged-in accounts at once instead of clobbering each
+ *  other's session. */
 function useAuth() {
   const [user, setUser] = useState(() => {
     try {
-      const raw = localStorage.getItem(USER_STORAGE_KEY);
+      const raw = sessionStorage.getItem(USER_STORAGE_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -61,12 +76,12 @@ function useAuth() {
   });
 
   const signIn = useCallback((account) => {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(account));
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(account));
     setUser(account);
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(USER_STORAGE_KEY);
+    sessionStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
   }, []);
 
@@ -117,19 +132,7 @@ function useHashRoute() {
   return hash;
 }
 
-function Dashboard({
-  user,
-  theme,
-  toggleTheme,
-  onLogout,
-  hash,
-  onOpenStudents,
-  onOpenTransactions,
-  onOpenSettings,
-  transactions,
-  settings,
-  activeSession,
-}) {
+function Dashboard({ user, theme, toggleTheme, onLogout, hash, transactions, settings, activeSession }) {
   const books = useBooks();
   const scans = useScanEvents();
 
@@ -164,7 +167,7 @@ function Dashboard({
   }, [clearLatestScan]);
 
   return (
-    <div className="app">
+    <div className="app librarian-theme">
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">
@@ -177,18 +180,6 @@ function Dashboard({
         </div>
 
         <div className="header-tools">
-          <button type="button" className="text-btn" onClick={onOpenStudents}>
-            <UserIcon size={12} /> Students
-          </button>
-
-          <button type="button" className="text-btn" onClick={onOpenTransactions}>
-            <ClockIcon size={12} /> Transactions
-          </button>
-
-          <button type="button" className="text-btn" onClick={onOpenSettings}>
-            <GearIcon size={12} /> Settings
-          </button>
-
           <button
             type="button"
             className="icon-btn"
@@ -225,8 +216,6 @@ function Dashboard({
 
         <StatBar books={books.books} transactions={transactions} settings={settings} />
 
-        <ActiveSessionBanner session={activeSession.session} onEndSession={activeSession.endSession} />
-
         <div className="layout">
           <ShelfGrid books={books.books} loading={books.loading} flashed={books.flashed} />
           <CheckpointFeed events={scans.events} loading={scans.loading} liveIds={scans.liveIds} />
@@ -254,6 +243,8 @@ export default function App() {
   // Called unconditionally (before the auth check below) — see the hook's
   // own note on why it has to tolerate a null user.
   const myAccount = useMyAccount(user);
+  const myClearance = useMyClearance(user);
+  const clearanceQueue = useClearanceRequests();
 
   const onSignup = hash.startsWith(ROUTE.SIGNUP);
   const onForgotPassword = hash.startsWith(ROUTE.FORGOT_PASSWORD);
@@ -261,6 +252,7 @@ export default function App() {
   const onStudents = hash.startsWith(ROUTE.STUDENTS);
   const onTransactions = hash.startsWith(ROUTE.TRANSACTIONS);
   const onSettings = hash.startsWith(ROUTE.SETTINGS);
+  const onClearance = hash.startsWith(ROUTE.CLEARANCE);
 
   const students = useStudents();
   const transactions = useTransactions();
@@ -302,21 +294,22 @@ export default function App() {
     window.location.hash = ROUTE.FORGOT_PASSWORD;
   }, []);
 
-  const openStudents = useCallback(() => {
-    window.location.hash = ROUTE.STUDENTS;
-  }, []);
-
-  const openTransactions = useCallback(() => {
-    window.location.hash = ROUTE.TRANSACTIONS;
-  }, []);
-
-  const openSettings = useCallback(() => {
-    window.location.hash = ROUTE.SETTINGS;
-  }, []);
-
   const backToDashboard = useCallback(() => {
     window.location.hash = ROUTE.DASHBOARD;
   }, []);
+
+  const navigate = useCallback((id) => {
+    window.location.hash = NAV_ROUTE[id] ?? ROUTE.DASHBOARD;
+  }, []);
+  const activeNav = onStudents
+    ? 'students'
+    : onTransactions
+    ? 'transactions'
+    : onSettings
+    ? 'settings'
+    : onClearance
+    ? 'clearance'
+    : 'dashboard';
 
   if (!user) {
     if (onSignup) return <SignupPage onSignedUp={signedUp} onGoToLogin={goToLogin} />;
@@ -330,61 +323,102 @@ export default function App() {
   // librarian-only.
   if (user.role !== 'librarian') {
     return (
-      <MyAccountPage myAccount={myAccount} account={user} onLogout={logout} onUpdateAccount={signIn} />
+      <MyAccountPage
+        myAccount={myAccount}
+        myClearance={myClearance}
+        account={user}
+        onLogout={logout}
+        onUpdateAccount={signIn}
+      />
     );
   }
 
+  const sidebar = (
+    <Sidebar
+      active={activeNav}
+      onNavigate={navigate}
+      pendingClearanceCount={clearanceQueue.pendingRequests.length}
+    />
+  );
+
   if (onStudents) {
     return (
-      <StudentsPage
-        students={students.students}
-        loading={students.loading}
-        error={students.error}
-        fetchIssuedBooks={students.fetchIssuedBooks}
-        onAddStudent={students.addStudent}
-        onEditStudent={students.editStudent}
-        onDeleteStudent={students.deleteStudent}
-        onBack={backToDashboard}
-      />
+      <>
+        {sidebar}
+        <StudentsPage
+          students={students.students}
+          loading={students.loading}
+          error={students.error}
+          fetchIssuedBooks={students.fetchIssuedBooks}
+          onAddStudent={students.addStudent}
+          onEditStudent={students.editStudent}
+          onDeleteStudent={students.deleteStudent}
+          onBack={backToDashboard}
+        />
+      </>
     );
   }
 
   if (onTransactions) {
     return (
-      <TransactionHistoryPage
-        transactions={transactions.transactions}
-        loading={transactions.loading}
-        error={transactions.error}
-        onBack={backToDashboard}
-      />
+      <>
+        {sidebar}
+        <TransactionHistoryPage
+          transactions={transactions.transactions}
+          loading={transactions.loading}
+          error={transactions.error}
+          onBack={backToDashboard}
+        />
+      </>
     );
   }
 
   if (onSettings) {
     return (
-      <SettingsPage
-        settings={settings.settings}
-        saving={settings.saving}
-        error={settings.error}
-        onSave={settings.save}
-        onBack={backToDashboard}
-      />
+      <>
+        {sidebar}
+        <SettingsPage
+          settings={settings.settings}
+          saving={settings.saving}
+          error={settings.error}
+          onSave={settings.save}
+          onBack={backToDashboard}
+        />
+      </>
+    );
+  }
+
+  if (onClearance) {
+    return (
+      <>
+        {sidebar}
+        <ClearancePage
+          requests={clearanceQueue.requests}
+          loading={clearanceQueue.loading}
+          error={clearanceQueue.error}
+          reviewer={user.username}
+          onApprove={clearanceQueue.approve}
+          onReject={clearanceQueue.reject}
+          certificateUrl={clearanceQueue.certificateUrl}
+          onBack={backToDashboard}
+        />
+      </>
     );
   }
 
   return (
-    <Dashboard
-      user={user}
-      theme={theme}
-      toggleTheme={toggleTheme}
-      onLogout={logout}
-      hash={hash}
-      onOpenStudents={openStudents}
-      onOpenTransactions={openTransactions}
-      onOpenSettings={openSettings}
-      transactions={transactions.transactions}
-      settings={settings.settings}
-      activeSession={activeSession}
-    />
+    <>
+      {sidebar}
+      <Dashboard
+        user={user}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogout={logout}
+        hash={hash}
+        transactions={transactions.transactions}
+        settings={settings.settings}
+        activeSession={activeSession}
+      />
+    </>
   );
 }

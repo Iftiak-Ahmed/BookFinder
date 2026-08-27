@@ -47,6 +47,26 @@ export function eventFromDoc(doc) {
   };
 }
 
+/** Firestore clearanceRequests doc -> the snake_case shape the dashboard expects. */
+export function clearanceRequestFromDoc(doc) {
+  const d = doc.data();
+  return {
+    id: doc.id,
+    student_username: d.studentUsername,
+    full_name: d.fullName,
+    student_id: d.studentIdNumber,
+    session: d.session,
+    department: d.department,
+    card_uid: d.cardUid ?? null,
+    status: d.status,
+    rejection_reason: d.rejectionReason ?? null,
+    certificate_number: d.certificateNumber ?? null,
+    decided_by: d.decidedBy ?? null,
+    created_at: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : null,
+    decided_at: d.decidedAt?.toDate ? d.decidedAt.toDate().toISOString() : null,
+  };
+}
+
 /** Firestore placementAlerts doc -> the snake_case shape for the history table. */
 export function alertFromDoc(doc) {
   const d = doc.data();

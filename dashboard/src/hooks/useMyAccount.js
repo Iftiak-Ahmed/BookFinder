@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
+// A book can be issued to this student by a checkpoint scan at any moment
+// while this page sits open, so poll instead of fetching once on load.
+const POLL_MS = 15_000;
 
 /** Owns the signed-in student/faculty's own issued-books list + profile edits.
  *  `user` may be null (signed out) — callers can call this unconditionally,
@@ -22,9 +25,7 @@ export function useMyAccount(user) {
       return;
     }
 
-    setLoading(true);
-
-    (async () => {
+    async function load() {
       try {
         const res = await fetch(`${API_BASE}/api/my-books/${encodeURIComponent(studentId)}`);
         if (!res.ok) throw new Error(`API responded ${res.status}`);
@@ -39,10 +40,15 @@ export function useMyAccount(user) {
       } finally {
         if (active) setLoading(false);
       }
-    })();
+    }
+
+    setLoading(true);
+    load();
+    const interval = setInterval(load, POLL_MS);
 
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, [role, studentId]);
 

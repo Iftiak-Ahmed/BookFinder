@@ -27,7 +27,7 @@ export default function TransactionHistoryPage({ transactions, loading, error, o
   }, [transactions, action, query]);
 
   return (
-    <div className="app">
+    <div className="app librarian-theme">
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">

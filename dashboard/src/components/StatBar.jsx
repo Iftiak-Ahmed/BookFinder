@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { STATE, TONE_VAR, bookState } from '../lib/format.js';
-import { AlertIcon, BookIcon, CheckIcon, ClockIcon, OutIcon } from './Icons.jsx';
+import { AlertIcon, BookIcon, CheckIcon, OutIcon } from './Icons.jsx';
 
 /** Stat tile: label in sentence case, value in proportional figures, colour
  *  carried by the rail and icon rather than by the number itself. */
-function Stat({ label, value, hint, tone, Icon, alert = false }) {
+function Stat({ label, value, tone, Icon, alert = false }) {
   return (
     <div
       className={`stat${alert ? ' is-alert' : ''}`}
@@ -15,25 +15,15 @@ function Stat({ label, value, hint, tone, Icon, alert = false }) {
         {label}
       </div>
       <div className="stat-value">{value}</div>
-      {hint && <div className="stat-hint">{hint}</div>}
     </div>
   );
 }
 
-function isToday(iso) {
-  if (!iso) return false;
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-  );
-}
-
 /**
- * The 6 Library Overview tiles, in a 3-up/3-down grid: Total Books,
- * Available Books, Issued Books, Returned Today, Misplaced Books, Overdue
- * Books. Everything is derived from data the app already loads at the top
- * level (books, transactions, settings) — no extra network calls.
+ * The 5 Library Overview tiles: Total Books, Available Books, Issued Books,
+ * Misplaced Books, Overdue Books. Everything is derived from data the app
+ * already loads at the top level (books, transactions, settings) — no extra
+ * network calls.
  */
 export default function StatBar({ books, transactions = [], settings }) {
   const counts = useMemo(() => {
@@ -44,11 +34,6 @@ export default function StatBar({ books, transactions = [], settings }) {
 
   const total = books.length;
   const available = total - counts.checked_out;
-
-  const returnedToday = useMemo(
-    () => transactions.filter((t) => t.action === 'RETURN' && isToday(t.timestamp)).length,
-    [transactions]
-  );
 
   const overdueCount = useMemo(() => {
     if (!settings) return 0;
@@ -84,32 +69,12 @@ export default function StatBar({ books, transactions = [], settings }) {
 
   return (
     <div className="stat-row">
-      <Stat label="Total books" value={total} hint="Tracked collection" tone="muted" Icon={BookIcon} />
-      <Stat
-        label="Available books"
-        value={available}
-        hint={total ? `${Math.round((counts.shelved / total) * 100)}% correctly shelved` : '—'}
-        tone="good"
-        Icon={CheckIcon}
-      />
-      <Stat
-        label="Issued books"
-        value={counts.checked_out}
-        hint={counts.checked_out ? 'Currently outside the library' : 'Nothing borrowed'}
-        tone="warning"
-        Icon={OutIcon}
-      />
-      <Stat
-        label="Returned today"
-        value={returnedToday}
-        hint="Since midnight"
-        tone="muted"
-        Icon={ClockIcon}
-      />
+      <Stat label="Total books" value={total} tone="muted" Icon={BookIcon} />
+      <Stat label="Available books" value={available} tone="good" Icon={CheckIcon} />
+      <Stat label="Issued books" value={counts.checked_out} tone="warning" Icon={OutIcon} />
       <Stat
         label="Misplaced books"
         value={counts.misplaced}
-        hint={counts.misplaced ? 'Needs re-shelving' : 'Every book on its shelf'}
         tone={counts.misplaced ? 'critical' : 'muted'}
         Icon={AlertIcon}
         alert={counts.misplaced > 0}
@@ -117,7 +82,6 @@ export default function StatBar({ books, transactions = [], settings }) {
       <Stat
         label="Overdue books"
         value={overdueCount}
-        hint={overdueCount ? 'Past the borrowing deadline' : 'Nothing overdue'}
         tone={overdueCount ? 'critical' : 'muted'}
         Icon={AlertIcon}
         alert={overdueCount > 0}

@@ -329,22 +329,32 @@ async function findBookByUid(uid) {
  * tap issues or returns depending on who currently holds the book.
  */
 async function handleCheckpointScan(readerId, uid) {
-  const student = await findStudentByUid(uid);
+  // A tag is either a student card or a book tag, never both, and the active
+  // session lives in a third, unrelated doc — so these reads don't depend on
+  // one another. Firing them together instead of one-at-a-time cuts the
+  // biggest chunk of tap-to-dashboard latency.
+  const [student, book, active] = await Promise.all([
+    findStudentByUid(uid),
+    findBookByUid(uid),
+    getActiveSession(),
+  ]);
 
   if (student) {
-    await setActiveSession(student);
-    await insertScanEvent({ readerId, uid, eventType: 'student_scan', student });
-    await logAccessEvent(student);
+    await Promise.all([
+      setActiveSession(student),
+      insertScanEvent({ readerId, uid, eventType: 'student_scan', student }),
+      logAccessEvent(student),
+    ]);
     console.log(`[checkpoint] ${student.name} (${student.studentId}) tapped in`);
     return;
   }
 
-  const book = await findBookByUid(uid);
-
   if (!book) {
     // Unregistered tag — still logged so it shows up while debugging.
     await insertScanEvent({ readerId, uid, eventType: 'book_scan' });
-    await raiseNotification({
+    // Fire-and-forget: raiseNotification already swallows its own errors and
+    // nothing downstream needs it to have finished.
+    raiseNotification({
       type: 'unknown_tag',
       priority: 'low',
       message: `Unregistered RFID tag ${uid} was scanned at the checkpoint.`,
@@ -353,7 +363,6 @@ async function handleCheckpointScan(readerId, uid) {
     return;
   }
 
-  const active = await getActiveSession();
   const isCurrentlyIssuedToActive =
     book.status === 'checked_out' && active && book.issuedTo === active.cardUid;
 
@@ -433,22 +442,27 @@ async function handleCheckpointScan(readerId, uid) {
     update.issuedTo = null;
   }
 
-  try {
-    await db.collection('books').doc(book.uid).update(update);
-  } catch (err) {
-    console.error('[scan] books update failed:', err.message);
-  }
+  // Neither write depends on the other's result (insertScanEvent logs the
+  // already-decided nextStatus, not a re-read of the doc), so send them
+  // together instead of paying for two round-trips back to back.
+  await Promise.all([
+    db.collection('books').doc(book.uid).update(update).catch((err) => {
+      console.error('[scan] books update failed:', err.message);
+    }),
+    insertScanEvent({
+      readerId,
+      uid,
+      eventType: 'book_scan',
+      student: active,
+      book,
+      bookStatus: nextStatus,
+    }),
+  ]);
 
-  await insertScanEvent({
-    readerId,
-    uid,
-    eventType: 'book_scan',
-    student: active,
-    book,
-    bookStatus: nextStatus,
-  });
-
-  await insertTransaction({ book, student: active, action });
+  // Fire-and-forget: the dashboard's checkpoint feed already got its update
+  // from insertScanEvent above; the audit-trail write can finish in the
+  // background without holding up the next scan's perceived latency.
+  insertTransaction({ book, student: active, action });
 
   const who = `${active.name} (${active.studentId})`;
   const verb = nextStatus === 'checked_out' ? 'checked out' : 'returned';
@@ -475,29 +489,36 @@ async function handleShelfScan(readerId, uid) {
 
   const isMisplaced = book.correctShelf !== shelfLabel;
 
-  try {
-    await db.collection('books').doc(book.uid).update({
-      currentShelf: shelfLabel,
+  // Same reasoning as the checkpoint path: the event log doesn't need to
+  // wait on the book-doc write to finish.
+  await Promise.all([
+    db
+      .collection('books')
+      .doc(book.uid)
+      .update({
+        currentShelf: shelfLabel,
+        isMisplaced,
+        status: 'in_library', // seen on a shelf means it is physically here
+        lastSeenAt: FieldValue.serverTimestamp(),
+      })
+      .catch((err) => console.error('[scan] books update failed:', err.message)),
+    insertScanEvent({
+      readerId,
+      uid,
+      eventType: 'shelf_scan',
+      book,
+      bookStatus: 'in_library',
       isMisplaced,
-      status: 'in_library', // seen on a shelf means it is physically here
-      lastSeenAt: FieldValue.serverTimestamp(),
-    });
-  } catch (err) {
-    console.error('[scan] books update failed:', err.message);
-  }
-
-  await insertScanEvent({
-    readerId,
-    uid,
-    eventType: 'shelf_scan',
-    book,
-    bookStatus: 'in_library',
-    isMisplaced,
-    detectedShelf: shelfLabel,
-  });
+      detectedShelf: shelfLabel,
+    }),
+  ]);
 
   if (isMisplaced) {
-    await raisePlacementAlert({ book, detectedShelf: shelfLabel });
+    // Fire-and-forget: the shelf display already has what it needs from the
+    // writes above.
+    raisePlacementAlert({ book, detectedShelf: shelfLabel }).catch((err) =>
+      console.error('[scan] Failed to raise placement alert:', err.message)
+    );
     sendCommand('ALERT:MISPLACED');
   } else {
     sendCommand('ALERT:CLEAR');
@@ -527,7 +548,10 @@ export async function processScanLine(line) {
 
   try {
     if (isCheckpointReader(readerId)) {
-      await touchReader(readerId, uid);
+      // Fire-and-forget: reader-status bookkeeping must not delay the scan
+      // result reaching the dashboard, and touchReader already catches its
+      // own errors.
+      touchReader(readerId, uid);
 
       // "Scan the Book" (Settings -> Register Book) arms this — the next
       // checkpoint tap is captured as a new book's UID instead of being
@@ -540,7 +564,7 @@ export async function processScanLine(line) {
 
       await handleCheckpointScan(readerId, uid);
     } else if (isShelfReader(readerId)) {
-      await touchReader(readerId, uid);
+      touchReader(readerId, uid);
       await handleShelfScan(readerId, uid);
     } else {
       // Reader ID the database has never heard of — log it so a typo in the

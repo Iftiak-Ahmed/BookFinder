@@ -46,6 +46,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    match /clearanceRequests/{requestId} {
+      allow read: if true;
+      allow write: if false;
+    }
     match /activeSession/{docId} {
       allow read: if true;
       allow write: if false;

@@ -4,6 +4,7 @@ import cors from 'cors';
 
 import { api } from './routes/api.js';
 import { auth } from './routes/auth.js';
+import { clearance } from './routes/clearance.js';
 import { loadShelfMap } from './services/shelfLookup.js';
 import { startSerialListener, stopSerialListener } from './serial/serialListener.js';
 import { startLibrarySettingsListener } from './services/librarySettings.js';
@@ -17,6 +18,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/api/auth', auth);
+app.use('/api/clearance', clearance);
 app.use('/api', api);
 
 async function main() {

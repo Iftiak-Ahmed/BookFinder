@@ -102,6 +102,7 @@ api.post('/students', async (req, res) => {
     }
 
     await ref.set({ studentId: student_id, name, dept, status: 'Outside' });
+    clearCapture();
     res.status(201).json(toStudentDto(await ref.get()));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -133,12 +134,28 @@ api.patch('/students/:id', async (req, res) => {
   }
 });
 
-/** DELETE /api/students/:id — remove a registered card. */
+/** DELETE /api/students/:id — remove a registered card. Refused while the
+ *  student still holds a checked-out book — otherwise the book is left
+ *  `checked_out` with an `issuedTo` pointing at a card that no longer
+ *  exists, and no tap can ever return or reissue it again. */
 api.delete('/students/:id', async (req, res) => {
   try {
     const ref = db.collection('students').doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Student not found' });
+
+    const outstanding = await db
+      .collection('books')
+      .where('issuedTo', '==', req.params.id)
+      .where('status', '==', 'checked_out')
+      .get();
+
+    if (!outstanding.empty) {
+      const titles = outstanding.docs.map((d) => d.data().title).join(', ');
+      return res.status(409).json({
+        error: `Cannot remove this card — ${outstanding.size} book(s) still checked out to it (${titles}). Return them first.`,
+      });
+    }
 
     await ref.delete();
     res.json({ ok: true });
@@ -648,6 +665,32 @@ api.get('/register-book/scan-status', (_req, res) => {
 
 /** POST /api/register-book/cancel-scan — librarian cancels/leaves the form. */
 api.post('/register-book/cancel-scan', (_req, res) => {
+  clearCapture();
+  res.json({ ok: true });
+});
+
+/**
+ * Same "arm the next tap, poll for it" capture used by Register Book above
+ * (registrationCapture.js is a single generic slot, not book-specific) —
+ * exposed under its own path so the Add Student "Scan the Card" flow reads
+ * clearly in the network tab instead of hitting a book-named endpoint.
+ */
+api.post('/register-student/arm-scan', (_req, res) => {
+  armCapture();
+  res.json({ armed: true });
+});
+
+api.get('/register-student/scan-status', (_req, res) => {
+  const c = getCapture();
+  res.json({
+    armed: c.armed,
+    uid: c.uid,
+    armed_at: c.armedAt ? new Date(c.armedAt).toISOString() : null,
+    captured_at: c.capturedAt ? new Date(c.capturedAt).toISOString() : null,
+  });
+});
+
+api.post('/register-student/cancel-scan', (_req, res) => {
   clearCapture();
   res.json({ ok: true });
 });

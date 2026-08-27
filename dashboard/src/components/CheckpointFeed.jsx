@@ -8,6 +8,13 @@ const KIND_ICON = {
   unknown: AlertIcon,
 };
 
+const LEGEND = [
+  { kind: 'return', label: 'Return' },
+  { kind: 'checkout', label: 'Checkout' },
+  { kind: 'student', label: 'Checkpoint scan' },
+  { kind: 'unknown', label: 'Unregistered' },
+];
+
 export default function CheckpointFeed({ events, loading, liveIds }) {
   return (
     <section className="panel feed-panel">
@@ -17,6 +24,15 @@ export default function CheckpointFeed({ events, loading, liveIds }) {
           <span className="panel-count">Live activity</span>
         </div>
       </div>
+
+      <ul className="feed-legend">
+        {LEGEND.map(({ kind, label }) => (
+          <li key={kind} style={{ '--legend-tone': TONE_VAR[EVENT_TONE[kind]].tone }}>
+            <span className="feed-legend-dot" />
+            {label}
+          </li>
+        ))}
+      </ul>
 
       <div className="panel-body">
         {loading ? (

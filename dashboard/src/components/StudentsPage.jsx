@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
-import { AlertIcon, BookIcon, UserIcon } from './Icons.jsx';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertIcon, BookIcon, CheckIcon, ScanIcon, UserIcon } from './Icons.jsx';
 import { clockTime } from '../lib/format.js';
+import { DEPARTMENTS } from '../lib/accountOptions.js';
+import { useRegisterStudentCard } from '../hooks/useRegisterStudentCard.js';
 
 function dateLabel(iso) {
   if (!iso) return '—';
@@ -22,8 +24,9 @@ function StudentRow({ student, fetchIssuedBooks, onEdit, onDelete }) {
       return;
     }
     setExpanded(true);
-    if (issued !== null) return;
 
+    // Always refetch — a book may have been issued/returned since the last
+    // time this row was expanded, and a stale cached list would hide that.
     setLoadingIssued(true);
     try {
       const books = await fetchIssuedBooks(student.card_uid);
@@ -173,10 +176,20 @@ function StudentRow({ student, fetchIssuedBooks, onEdit, onDelete }) {
 const EMPTY_FORM = { uid: '', student_id: '', name: '', dept: '' };
 
 function AddStudentForm({ onAdd }) {
+  const { armed, scannedUid, armScan, cancelScan, setManualUid } = useRegisterStudentCard();
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (scannedUid) setForm((f) => ({ ...f, uid: scannedUid }));
+  }, [scannedUid]);
+
+  async function handleScanClick() {
+    setError(null);
+    await armScan();
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -186,6 +199,7 @@ function AddStudentForm({ onAdd }) {
       await onAdd(form);
       setForm(EMPTY_FORM);
       setOpen(false);
+      cancelScan();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -203,13 +217,41 @@ function AddStudentForm({ onAdd }) {
 
   return (
     <form className="add-student-form" onSubmit={submit}>
-      <input
-        className="field-input"
-        placeholder="Card RFID UID"
-        value={form.uid}
-        onChange={(e) => setForm((f) => ({ ...f, uid: e.target.value }))}
-        required
-      />
+      {armed && (
+        <div className="banner is-accent-banner" role="status">
+          <ScanIcon size={15} />
+          <span>Please scan the student's RFID card.</span>
+        </div>
+      )}
+
+      {!armed && scannedUid && form.uid === scannedUid && (
+        <div className="banner is-good-banner" role="status">
+          <CheckIcon size={15} />
+          <span>Card scanned successfully.</span>
+        </div>
+      )}
+
+      <div className="field-input-row">
+        <input
+          className="field-input"
+          placeholder="Card RFID UID"
+          value={form.uid}
+          onChange={(e) => {
+            setForm((f) => ({ ...f, uid: e.target.value }));
+            setManualUid(null);
+          }}
+          required
+        />
+        <button type="button" className="btn-primary" onClick={handleScanClick} disabled={armed}>
+          {armed ? 'Waiting for scan…' : 'Scan the Card'}
+        </button>
+        {armed && (
+          <button type="button" className="text-btn" onClick={cancelScan}>
+            Cancel
+          </button>
+        )}
+      </div>
+
       <input
         className="field-input"
         placeholder="Student ID"
@@ -224,17 +266,33 @@ function AddStudentForm({ onAdd }) {
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         required
       />
-      <input
+      <select
         className="field-input"
-        placeholder="Department"
         value={form.dept}
         onChange={(e) => setForm((f) => ({ ...f, dept: e.target.value }))}
         required
-      />
+      >
+        <option value="" disabled>
+          Select Dept
+        </option>
+        {DEPARTMENTS.map((d) => (
+          <option key={d} value={d}>
+            {d}
+          </option>
+        ))}
+      </select>
       <button type="submit" className="btn-primary" disabled={busy}>
         {busy ? 'Adding…' : 'Save'}
       </button>
-      <button type="button" className="text-btn" onClick={() => setOpen(false)} disabled={busy}>
+      <button
+        type="button"
+        className="text-btn"
+        onClick={() => {
+          cancelScan();
+          setOpen(false);
+        }}
+        disabled={busy}
+      >
         Cancel
       </button>
       {error && <span className="field-hint" style={{ color: 'var(--critical)' }}>{error}</span>}
@@ -263,7 +321,7 @@ export default function StudentsPage({
   }, [students, query]);
 
   return (
-    <div className="app">
+    <div className="app librarian-theme">
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AlertIcon, BookIcon, UserIcon } from './Icons.jsx';
+import { AlertIcon, BookIcon, CheckIcon, UserIcon } from './Icons.jsx';
+import ClearanceOverlay from './ClearanceSection.jsx';
 import { clockTime } from '../lib/format.js';
 import { DEPARTMENTS, DESIGNATIONS } from '../lib/accountOptions.js';
 
@@ -252,8 +253,9 @@ function ProfileOverlay({ account, updateProfile, onProfileSaved, onClose }) {
   );
 }
 
-export default function MyAccountPage({ myAccount, account, onLogout, onUpdateAccount }) {
+export default function MyAccountPage({ myAccount, myClearance, account, onLogout, onUpdateAccount }) {
   const [showProfile, setShowProfile] = useState(false);
+  const [showClearance, setShowClearance] = useState(false);
 
   return (
     <div className="app">
@@ -269,6 +271,11 @@ export default function MyAccountPage({ myAccount, account, onLogout, onUpdateAc
         </div>
 
         <div className="header-tools">
+          {account.role === 'student' && (
+            <button type="button" className="text-btn" onClick={() => setShowClearance(true)}>
+              <CheckIcon size={12} /> Certificate
+            </button>
+          )}
           <button type="button" className="user-chip user-chip-btn" onClick={() => setShowProfile(true)}>
             <UserIcon size={12} />
             {account.name} · {account.role}
@@ -299,6 +306,10 @@ export default function MyAccountPage({ myAccount, account, onLogout, onUpdateAc
           }}
           onClose={() => setShowProfile(false)}
         />
+      )}
+
+      {showClearance && (
+        <ClearanceOverlay account={account} clearance={myClearance} onClose={() => setShowClearance(false)} />
       )}
     </div>
   );
