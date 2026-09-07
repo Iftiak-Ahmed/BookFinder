@@ -24,7 +24,9 @@ function rackSubLabel(correctShelf) {
   return parts.length >= 3 ? parts.slice(1).join(' · ') : correctShelf ?? 'Unassigned';
 }
 
-/** Splits a department's books into its Upper/Lower rack sub-groups, in a stable order. */
+/** Splits a department's books into its Upper/Lower rack sub-groups. Upper
+ *  always renders first — matching the physical shelf, upper rack on top —
+ *  rather than alphabetical order, which would put "Lower" first. */
 function racks(books) {
   const grouped = new Map();
   for (const book of books) {
@@ -32,7 +34,12 @@ function racks(books) {
     if (!grouped.has(rack)) grouped.set(rack, []);
     grouped.get(rack).push(book);
   }
-  return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  return [...grouped.entries()].sort(([a], [b]) => {
+    const aUpper = a.startsWith('Upper');
+    const bUpper = b.startsWith('Upper');
+    if (aUpper !== bUpper) return aUpper ? -1 : 1;
+    return a.localeCompare(b);
+  });
 }
 
 /** Case-insensitive substring match against the fields a librarian would search by. */

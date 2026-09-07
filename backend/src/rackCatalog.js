@@ -8,8 +8,8 @@ export const RACKS = {
   CSE_LOWER: { dept: 'CSE', position: 'Lower', subject: 'Artificial Intelligence' },
   EEE_UPPER: { dept: 'EEE', position: 'Upper', subject: 'Electric Machinery' },
   EEE_LOWER: { dept: 'EEE', position: 'Lower', subject: 'Microelectronic Circuits' },
-  SNH_UPPER: { dept: 'Science & Humanities', position: 'Upper', subject: 'Mathematics' },
-  SNH_LOWER: { dept: 'Science & Humanities', position: 'Lower', subject: 'Physics' },
+  SCIENCE_UPPER: { dept: 'Science & Humanities', position: 'Upper', subject: 'Mathematics' },
+  SCIENCE_LOWER: { dept: 'Science & Humanities', position: 'Lower', subject: 'Physics' },
 };
 
 export function rackLabel(rackId) {

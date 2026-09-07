@@ -9,6 +9,7 @@ import { loadShelfMap } from './services/shelfLookup.js';
 import { startSerialListener, stopSerialListener } from './serial/serialListener.js';
 import { startLibrarySettingsListener } from './services/librarySettings.js';
 import { ensureReadersSeeded, startReaderOfflineSweep } from './services/readerMonitor.js';
+import { startAbsenceSweep } from './services/scanProcessor.js';
 
 const PORT = Number(process.env.PORT ?? 4000);
 const SERIAL_PORT = process.env.SERIAL_PORT ?? 'COM3';
@@ -27,6 +28,7 @@ async function main() {
   startLibrarySettingsListener();
   await ensureReadersSeeded();
   startReaderOfflineSweep();
+  startAbsenceSweep();
 
   app.listen(PORT, () => {
     console.log(`[api] REST API on http://localhost:${PORT}/api`);

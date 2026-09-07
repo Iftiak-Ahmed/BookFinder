@@ -39,49 +39,45 @@ scan came from, so every `UID:` line is treated as a checkpoint scan
 readers are wired, set this in `backend/.env`:
 
 ```
-DEFAULT_READER_ID=SHELF2_A
+DEFAULT_READER_ID=CSE_UPPER
 ```
 
-Now every tap is treated as a read on Shelf 2. Tapping a book that belongs on
-Shelf 1 will flag it misplaced on the dashboard. Set it back to `CHECKPOINT`
-(or delete the line) for borrow/return behaviour.
+Now every tap is treated as a read on the CSE Upper rack. Tapping a book that
+belongs on a different rack will flag it misplaced on the dashboard. Set it
+back to `CHECKPOINT` (or delete the line) for borrow/return behaviour.
 
 ## Wiring the full seven readers
 
 One ESP32, seven MFRC522 readers on a **shared SPI bus**, individual SS pins.
+This is what `firmware/bookfinder.ino` is currently wired for.
 
 | Signal | ESP32 pin | Notes |
 | ------ | --------- | ----- |
 | SCK | GPIO 18 | shared |
 | MOSI | GPIO 23 | shared |
 | MISO | GPIO 19 | shared |
-| RST | GPIO 22 | shared (your current sketch already uses 22) |
+| RST | GPIO 22 | shared |
 | SS | one pin per reader | see below |
 
-| Reader ID | Location | SS pin |
-| --------- | -------- | ------ |
-| `CHECKPOINT` | Entry/exit desk | GPIO 5 (your current reader) |
-| `SHELF1_A` | Shelf 1, left | GPIO 4 |
-| `SHELF1_B` | Shelf 1, right | GPIO 2 |
-| `SHELF2_A` | Shelf 2, left | GPIO 15 |
-| `SHELF2_B` | Shelf 2, right | GPIO 21 |
-| `SHELF3_A` | Shelf 3, left | GPIO 13 |
-| `SHELF3_B` | Shelf 3, right | GPIO 12 |
+| Reader ID | Rack | SS pin |
+| --------- | ---- | ------ |
+| `CHECKPOINT` | Main scanning & issue point | GPIO 26 |
+| `CSE_UPPER` | CSE, Upper rack | GPIO 33 |
+| `CSE_LOWER` | CSE, Lower rack | GPIO 4 |
+| `EEE_UPPER` | EEE, Upper rack | GPIO 16 |
+| `EEE_LOWER` | EEE, Lower rack | GPIO 5 |
+| `SNH_UPPER` | Science & Humanities, Upper rack | GPIO 17 |
+| `SNH_LOWER` | Science & Humanities, Lower rack | GPIO 25 |
 
 All readers run at **3.3 V**, not 5 V.
 
-When you get there, the only change needed is to print the reader id with the
-UID — replace `Serial.print("UID: ")` with the reader's name and a comma:
+These 7 ids must match the `shelfMap` rows seeded by
+`backend/scripts/seedShelfMap.js` exactly — they already do, since both come
+from `backend/src/rackCatalog.js`.
 
-```cpp
-// inside the per-reader loop
-Serial.print(readerName);   // e.g. "SHELF1_A"
-Serial.print(",");
-Serial.println(uid);        // spaces are fine, the backend strips them
-```
-
-The six shelf ids must match the `shelfMap` rows seeded by
-`backend/scripts/seedShelfMap.js` exactly.
+`BUZZER_PIN` (GPIO 27) and `LED_PIN` (GPIO 14) in the sketch are
+placeholders — not yet confirmed against physical wiring. Update those two
+`#define`s if the alert buzzer/LED end up on different pins.
 
 ## Registered tags
 

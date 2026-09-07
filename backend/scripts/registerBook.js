@@ -7,7 +7,7 @@
  *   node scripts/registerBook.js --uid=A1B2C3D4 --title="Operating System" \
  *     --author="A. Silberschatz" --copy=1 --rack=CSE_UPPER
  *
- * --rack must be one of: CSE_UPPER, CSE_LOWER, EEE_UPPER, EEE_LOWER, SNH_UPPER, SNH_LOWER
+ * --rack must be one of: CSE_UPPER, CSE_LOWER, EEE_UPPER, EEE_LOWER, SCIENCE_UPPER, SCIENCE_LOWER
  */
 import '../src/db/firebaseAdmin.js';
 import { db } from '../src/db/firebaseAdmin.js';
