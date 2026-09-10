@@ -66,8 +66,8 @@ This is what `firmware/bookfinder.ino` is currently wired for.
 | `CSE_LOWER` | CSE, Lower rack | GPIO 4 |
 | `EEE_UPPER` | EEE, Upper rack | GPIO 16 |
 | `EEE_LOWER` | EEE, Lower rack | GPIO 5 |
-| `SNH_UPPER` | Science & Humanities, Upper rack | GPIO 17 |
-| `SNH_LOWER` | Science & Humanities, Lower rack | GPIO 25 |
+| `SCIENCE_UPPER` | Science & Humanities, Upper rack | GPIO 17 |
+| `SCIENCE_LOWER` | Science & Humanities, Lower rack | GPIO 25 |
 
 All readers run at **3.3 V**, not 5 V.
 

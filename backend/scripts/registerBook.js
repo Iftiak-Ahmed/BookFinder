@@ -9,6 +9,7 @@
  *
  * --rack must be one of: CSE_UPPER, CSE_LOWER, EEE_UPPER, EEE_LOWER, SCIENCE_UPPER, SCIENCE_LOWER
  */
+import 'dotenv/config';
 import '../src/db/firebaseAdmin.js';
 import { db } from '../src/db/firebaseAdmin.js';
 import { RACKS, rackLabel } from '../src/rackCatalog.js';

@@ -7,6 +7,7 @@
  *   node scripts/registerStudent.js --uid=A1B2C3D4 --studentId=202114202 \
  *     --name="Lt Iftiak" --dept=CSE
  */
+import 'dotenv/config';
 import '../src/db/firebaseAdmin.js';
 import { db } from '../src/db/firebaseAdmin.js';
 

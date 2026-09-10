@@ -13,31 +13,17 @@ import { tryCaptureRegistration } from './registrationCapture.js';
 const ACTIVE_SESSION_REF = () => db.collection('activeSession').doc('current');
 
 /**
- * RC522 readers re-read a tag many times a second while it sits on the antenna.
- * Without this, one physical tap would toggle a book's status dozens of times.
- * Same reader + same UID inside this window is ignored.
+ * The firmware is edge-triggered (one REPORT per placement, one REMOVE per
+ * pickup, one tap per checkpoint scan) so it shouldn't repeat a line for the
+ * same reader+UID on its own — this is just a safety net against a flaky
+ * read producing a near-duplicate line.
  */
-const DUPLICATE_SCAN_WINDOW_MS = 3_000;
+const DUPLICATE_SCAN_WINDOW_MS = 250;
 
 const DAY_MS = 86_400_000;
 
 /** `${readerId}|${uid}` -> timestamp of the last accepted scan. */
 const lastScanAt = new Map();
-
-/**
- * A book with no wire to say "I've been picked up" can only be tracked by
- * absence: the firmware re-reports whatever tag currently sits on a shelf
- * reader roughly once a second, which keeps bumping that book's `lastSeenAt`
- * (at most once per DUPLICATE_SCAN_WINDOW_MS, since a duplicate scan is
- * suppressed before it reaches handleShelfScan). If a shelved book's
- * lastSeenAt goes stale past this, it's treated as picked up. Comfortably
- * above the dedupe window so a couple of missed reads don't falsely clear a
- * book that's still sitting right there. Based on the persisted Firestore
- * field (not in-memory state) so it also cleans up anything left over from
- * before the backend last started.
- */
-const ABSENCE_TIMEOUT_MS = 8_000;
-const ABSENCE_SWEEP_INTERVAL_MS = 2_000;
 
 /**
  * Which reader a bare "UID: ..." line is attributed to. The single-reader
@@ -52,29 +38,43 @@ function normaliseUid(raw) {
 }
 
 /**
- * Parse one serial line into { readerId, uid }. Formats accepted, checked in
- * this order:
+ * Parse one serial line into { readerId, uid, kind? }. Formats accepted,
+ * checked in this order:
  *
  *   C) "REPORT,C0 6E 68 5C,CSE_UPPER,SCIENCE_LOWER,MISPLACED"
- *      the current 7-reader sketch's shelf-scan summary line — the reader id
- *      is the 3rd field (currentShelf). The 4th/5th fields (correctShelf,
- *      OK|MISPLACED) are the firmware's own guess and are deliberately
- *      ignored — handleShelfScan() re-derives isMisplaced from Firestore, so
- *      the dashboard stays correct even if a book's correct shelf changes
+ *      shelf-reader placement line — sent once when a book lands on a
+ *      reader (the current sketch is edge-triggered: it does not repeat
+ *      this while the book just sits there). The reader id is the 3rd
+ *      field. The 4th/5th fields (correctShelf, OK|MISPLACED|UNKNOWN) are
+ *      the firmware's own guess and are deliberately ignored —
+ *      handleShelfScan() re-derives isMisplaced from Firestore, so the
+ *      dashboard stays correct even if a book's correct shelf changes
  *      without reflashing the firmware.
  *
+ *   E) "REMOVE,C0 6E 68 5C,CSE_UPPER,NOT_SCANNED"
+ *      shelf-reader removal line — sent once a book has been missing from
+ *      a reader for several consecutive polls (debounced in firmware so a
+ *      single flaky read doesn't falsely clear it). Explicit signal to
+ *      clear that book off the shelf immediately instead of waiting on the
+ *      absence sweep's timeout.
+ *
+ *   F) "PERSON,B0 AB 4F 5C,Isbat"  or
+ *      "CHECKPOINT,C0 6E 68 5C,CSE_UPPER,ISSUED,Isbat"
+ *      checkpoint taps — a student card (PERSON) or a book tap
+ *      (CHECKPOINT), including the firmware's own "unknown tag" case
+ *      ("CHECKPOINT,<uid>,,UNKNOWN,"). Only the uid (2nd field) is used;
+ *      the rest is the firmware's own guess about who/what it is and is
+ *      ignored the same way format C's guess is — handleCheckpointScan()
+ *      looks the uid up in Firestore itself.
+ *
  *   D) "READER_7 (CHECKPOINT) UID: B0 E3 90 5C"  or  "READER_7 UID: ..."
- *      the same sketch's checkpoint line. A shelf reader's own
- *      "READER_4 (CSE_UPPER) UID: ..." line matches this same shape but is
- *      deliberately NOT parsed here — its REPORT line (format C, printed
- *      right after it) already carries that scan, so parsing both would
- *      double-count one physical tap.
+ *      an older sketch's checkpoint line, kept for backward compatibility.
  *
  *   A) "SHELF1_A,09FF22B0"   older multi-reader protocol — carries the reader id
  *   B) "UID: B0 E3 90 5C"    the single-reader sketch — attributed to
  *                            DEFAULT_READER_ID, since it names no reader
  *
- * Everything else (the sketch's own "Book: ...", "Status: ...", "ID - ...",
+ * Everything else (the sketch's own "Book: ...", "Status: ...", "Action: ...",
  * "------" separators, boot banners) returns null and is ignored.
  */
 export function parseScanLine(line) {
@@ -83,7 +83,7 @@ export function parseScanLine(line) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return null;
 
-  // Format C — shelf reader report line
+  // Format C — shelf reader placement line
   if (trimmed.startsWith('REPORT,')) {
     const parts = trimmed.split(',');
     if (parts.length !== 5) return null;
@@ -95,6 +95,31 @@ export function parseScanLine(line) {
     if (!readerId || !/^[A-Z0-9_]+$/.test(readerId)) return null;
 
     return { readerId, uid };
+  }
+
+  // Format E — shelf reader removal line
+  if (trimmed.startsWith('REMOVE,')) {
+    const parts = trimmed.split(',');
+    if (parts.length !== 4) return null;
+
+    const uid = normaliseUid(parts[1]);
+    const readerId = parts[2].trim().toUpperCase();
+
+    if (!uid || !/^[0-9A-F]+$/.test(uid)) return null;
+    if (!readerId || !/^[A-Z0-9_]+$/.test(readerId)) return null;
+
+    return { readerId, uid, kind: 'remove' };
+  }
+
+  // Format F — checkpoint tap, person or book
+  if (trimmed.startsWith('PERSON,') || trimmed.startsWith('CHECKPOINT,')) {
+    const parts = trimmed.split(',');
+    if (parts.length < 2) return null;
+
+    const uid = normaliseUid(parts[1]);
+    if (!uid || !/^[0-9A-F]+$/.test(uid)) return null;
+
+    return { readerId: 'CHECKPOINT', uid };
   }
 
   // Format D — checkpoint line, with or without the "(CHECKPOINT)" tag
@@ -590,6 +615,30 @@ async function handleShelfScan(readerId, uid) {
 }
 
 /**
+ * Shelf reader: the firmware has debounced several consecutive misses and
+ * confirmed the book is gone — clear it immediately rather than waiting on
+ * the absence sweep's timeout. Only clears if this reader is still the one
+ * the book is on record as sitting on, so a REMOVE that arrives after the
+ * book has already been re-placed elsewhere (out-of-order serial lines)
+ * can't clobber the newer location.
+ */
+async function handleShelfRemoval(readerId, uid) {
+  const shelfLabel = getShelfLabel(readerId);
+  const book = await findBookByUid(uid);
+
+  if (!book || book.currentShelf !== shelfLabel) return;
+
+  await db
+    .collection('books')
+    .doc(book.uid)
+    .update({ currentShelf: null, isMisplaced: false })
+    .catch((err) => console.error('[scan] books update failed:', err.message));
+
+  sendCommand('ALERT:CLEAR');
+  console.log(`[${shelfLabel}] ${book.title} Copy ${book.copyNo} picked up`);
+}
+
+/**
  * Entry point — call this with one raw line from the serial port.
  */
 export async function processScanLine(line) {
@@ -600,7 +649,7 @@ export async function processScanLine(line) {
     return;
   }
 
-  const { readerId, uid } = parsed;
+  const { readerId, uid, kind } = parsed;
 
   if (isDuplicate(readerId, uid)) return;
 
@@ -623,7 +672,11 @@ export async function processScanLine(line) {
       await handleCheckpointScan(readerId, uid);
     } else if (isShelfReader(readerId)) {
       touchReader(readerId, uid);
-      await handleShelfScan(readerId, uid);
+      if (kind === 'remove') {
+        await handleShelfRemoval(readerId, uid);
+      } else {
+        await handleShelfScan(readerId, uid);
+      }
     } else {
       // Reader ID the database has never heard of — log it so a typo in the
       // firmware or a missing shelf_map row is obvious during the demo.
@@ -636,23 +689,48 @@ export async function processScanLine(line) {
 }
 
 /**
- * Periodic sweep: any book still marked as on a shelf whose `lastSeenAt`
- * has gone stale past ABSENCE_TIMEOUT_MS was physically picked up — clear it
- * so the dashboard stops showing it as present/misplaced there. Reads
- * straight from Firestore (not in-memory state), so it also catches books
- * left stale from before the backend last started, not just ones that go
- * quiet during this run.
+ * The current firmware is event-driven, not a heartbeat: a shelf reader
+ * sends REPORT once when a book lands and REMOVE once it's confirmed gone
+ * (handleShelfRemoval, above) — it does NOT keep re-reporting "still here"
+ * while a book just sits there. So `lastSeenAt` is no longer a live signal
+ * of presence; REMOVE is the real removal path now. This sweep is only a
+ * safety net for a REMOVE line that never arrives (serial noise, a reset
+ * mid-cycle) — the timeout is deliberately long so it never races ahead of
+ * a legitimate REMOVE and clears a book that's still on the shelf.
+ *
+ * Based on the persisted Firestore field (not in-memory state), so it also
+ * cleans up anything left over from before the backend last started.
+ *
+ * The sweep reads every matching book document each time it runs, so its
+ * interval directly multiplies Firestore read cost (docs x sweeps/sec) —
+ * too tight a value burns through the Spark plan's daily read quota in
+ * minutes, not the kind of thing that's obvious until it fails.
+ */
+const ABSENCE_TIMEOUT_MS = 5 * 60_000;
+const ABSENCE_SWEEP_INTERVAL_MS = 60_000;
+
+/**
+ * Periodic safety-net sweep: any book still marked as on a shelf whose
+ * `lastSeenAt` has gone stale past ABSENCE_TIMEOUT_MS is cleared, in case
+ * its REMOVE line never reached the backend. Reads straight from Firestore
+ * (not in-memory state), so it also catches books left stale from before
+ * the backend last started, not just ones that go quiet during this run.
+ *
+ * Queries only books currently marked on a shelf, instead of the whole
+ * collection — a prior version read every book document on every sweep,
+ * which multiplies fast (docs x sweeps/sec) and is what burned through the
+ * Spark plan's daily Firestore read quota. Scoping to `currentShelf != null`
+ * keeps the read cost proportional to books actually on shelves right now.
  */
 export function startAbsenceSweep() {
   setInterval(async () => {
     const now = Date.now();
 
     try {
-      const snapshot = await db.collection('books').get();
+      const snapshot = await db.collection('books').where('currentShelf', '!=', null).get();
 
       for (const doc of snapshot.docs) {
         const book = doc.data();
-        if (!book.currentShelf) continue;
 
         const lastMs = book.lastSeenAt?.toMillis ? book.lastSeenAt.toMillis() : 0;
         if (now - lastMs < ABSENCE_TIMEOUT_MS) continue;

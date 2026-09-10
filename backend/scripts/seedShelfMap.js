@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import '../src/db/firebaseAdmin.js';
 import { db } from '../src/db/firebaseAdmin.js';
 import { RACKS, rackLabel } from '../src/rackCatalog.js';

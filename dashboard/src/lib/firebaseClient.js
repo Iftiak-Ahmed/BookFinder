@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,3 +21,12 @@ if (!configured) {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// VITE_USE_FIRESTORE_EMULATOR=true routes all reads/writes to a local
+// Firestore emulator instead of the real cloud project — used when the
+// project's free-tier daily quota is exhausted, so testing isn't blocked
+// waiting on a quota reset.
+if (import.meta.env.VITE_USE_FIRESTORE_EMULATOR === 'true') {
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  console.log('[firebase] Using local Firestore emulator on localhost:8080');
+}

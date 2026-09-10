@@ -18,10 +18,7 @@ export default function ShelfCard({ book, flashing = false }) {
   return (
     <article className={className} style={{ '--book-tone': tone.tone }}>
       <h4 className="book-title">{book.title}</h4>
-      <p className="book-meta">
-        Copy {book.copy_no}
-        {book.category ? ` · ${book.category}` : ''}
-      </p>
+      {book.category && <p className="book-meta">{book.category}</p>}
 
       {state === STATE.MISPLACED && (
         <p className="misplace-note">

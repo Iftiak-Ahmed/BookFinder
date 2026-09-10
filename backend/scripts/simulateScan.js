@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import '../src/db/firebaseAdmin.js';
 import { loadShelfMap } from '../src/services/shelfLookup.js';
 import { processScanLine } from '../src/services/scanProcessor.js';
